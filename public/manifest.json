@@ -1,0 +1,14 @@
+{
+  "name": "NuCoat Ops",
+  "short_name": "NuCoat Ops",
+  "description": "Content ops for the NuCoat video series: pipeline, approvals, requests, and calendar",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0F4C81",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
