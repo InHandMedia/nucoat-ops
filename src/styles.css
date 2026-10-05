@@ -1,7 +1,8 @@
 :root{
   --paper:#FFFFFF; --surface:#FFFFFF; --surface-2:#F2F4F8;
   --ink:#111318; --ink-soft:#5B6472; --line:#DEE2EA;
-  --accent:#0F4C81; --accent-ink:#FFFFFF; --accent-dark:#0A2E52; --accent-tint:#E4EEF8;
+  --accent:#1B7FB3; --accent-ink:#FFFFFF; --accent-dark:#0E5A82; --accent-tint:#E2F2FA; --bar:#FFFFFF;
+  --cyan:#38A0CE; --magenta:#D8197E; --yellow:#F8ED33;
   --warn:#D5482E;
   --shadow: 0 1px 2px rgba(17,19,24,.06), 0 4px 14px rgba(17,19,24,.05);
   color-scheme: light;
@@ -18,7 +19,7 @@ input[type=checkbox]{ accent-color:var(--accent); width:16px; height:16px; curso
 
 #app{ display:flex; flex-direction:column; min-height:100%; }
 .topbar{
-  position:sticky; top:0; z-index:20; background:var(--surface); border-bottom:2px solid var(--ink);
+  position:sticky; top:0; z-index:20; background:var(--bar); color:var(--ink); padding-bottom:20px;
   padding:12px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
   padding-top:max(12px, env(safe-area-inset-top));
   padding-left:max(20px, env(safe-area-inset-left));
@@ -27,7 +28,11 @@ input[type=checkbox]{ accent-color:var(--accent); width:16px; height:16px; curso
 .brand{ display:flex; align-items:center; gap:10px; margin-right:auto; }
 .brand .mark{ width:34px; height:34px; border-radius:9px; background:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Big Shoulders Display'; font-weight:800; font-size:16px; color:#fff; flex:none; }
 .brand .name{ font-size:22px; line-height:1; }
+.brand-logo{ height:34px; width:auto; display:block; }
+.brand .ops{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:15px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); border-left:2px solid var(--line); padding-left:10px; margin-left:2px; }
 .brand .tag{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.08em; display:block; margin-top:2px; }
+.topbar::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:12px; pointer-events:none;
+  background:linear-gradient(to bottom, var(--cyan) 0 3px, #fff 3px 4.5px, var(--magenta) 4.5px 7.5px, #fff 7.5px 9px, var(--yellow) 9px 12px); }
 nav.tabs{ display:flex; gap:4px; overflow-x:auto; }
 nav.tabs button{
   background:none; border:none; color:var(--ink-soft); font-weight:700; font-size:13px;
@@ -36,7 +41,7 @@ nav.tabs button{
 nav.tabs button:hover{ background:var(--surface-2); color:var(--ink); }
 nav.tabs button.active{ background:var(--accent); color:#fff; }
 .viewer-chip{ display:flex; align-items:center; gap:10px; padding:4px 4px; border-radius:99px; font-size:12px; color:var(--ink-soft); flex:none; }
-.viewer-chip .who{ width:26px; height:26px; border-radius:99px; background:var(--accent-dark); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; }
+.viewer-chip .who{ width:26px; height:26px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; }
 .viewer-chip button{ background:none; border:none; color:var(--ink-soft); cursor:pointer; text-decoration:underline; font-size:12px; }
 
 main{ padding:22px 20px 64px; padding-bottom:max(64px, calc(24px + env(safe-area-inset-bottom))); max-width:1180px; margin:0 auto; width:100%; flex:1; }
@@ -145,7 +150,8 @@ tbody tr:hover{ background:var(--surface-2); }
 .modal-actions{ display:flex; justify-content:space-between; gap:10px; margin-top:18px; }
 
 .login-wrap{ min-height:100%; display:flex; align-items:center; justify-content:center; padding:24px; }
-.login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px; box-shadow:var(--shadow); text-align:center; }
+.login-card{ width:100%; max-width:380px; background:var(--surface); border:1px solid var(--line); border-top:6px solid var(--cyan); border-radius:16px; padding:32px; box-shadow:var(--shadow); text-align:center; }
+.login-card .login-logo{ width:200px; max-width:70%; height:auto; display:block; margin:0 auto 10px; }
 .login-card .mark{ width:48px; height:48px; border-radius:12px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; margin:0 auto 14px; font-family:'Big Shoulders Display'; font-weight:800; font-size:20px; }
 .login-card h1{ font-size:26px; margin:0 0 4px; }
 .login-card p{ color:var(--ink-soft); font-size:13px; margin:0 0 20px; }
@@ -261,7 +267,7 @@ tbody tr:hover{ background:var(--surface-2); }
 .seg{ display:flex; gap:3px; margin:10px 0 4px; }
 .seg i{ flex:1; height:10px; border-radius:3px; background:var(--surface-2); border:1px solid var(--line); }
 .seg i.on{ background:var(--accent); border-color:var(--accent); }
-.seg i.mid{ background:#9DB9D6; border-color:#9DB9D6; }
+.seg i.mid{ background:#A8D4EA; border-color:#A8D4EA; }
 .seg-legend{ font-size:12px; color:var(--ink-soft); display:flex; gap:14px; flex-wrap:wrap; }
 
 .meter{ height:14px; border-radius:99px; background:var(--surface-2); border:1px solid var(--line); overflow:hidden; position:relative; }

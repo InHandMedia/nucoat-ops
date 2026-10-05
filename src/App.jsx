@@ -215,11 +215,8 @@ export default function App() {
       )}
       <header className="topbar">
         <div className="brand">
-          <div className="mark">NC</div>
-          <div>
-            <div className="name disp">NuCoat Ops</div>
-            <span className="tag">Content Ops</span>
-          </div>
+          <img className="brand-logo" src="/nucoat-logo.png" alt="NuCoat" />
+          <span className="ops">Ops</span>
         </div>
         <nav className="tabs">
           {tabs.map(([key, label]) => (

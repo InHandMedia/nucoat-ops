@@ -20,8 +20,8 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="mark">NC</div>
-        <h1 className="disp">NuCoat Ops</h1>
+        <img className="login-logo" src="/nucoat-logo.png" alt="NuCoat" />
+        <h1 className="disp">Ops</h1>
         {isDemo ? (
           <>
             <p>Demo mode with sample data. Pick who to look at the app as.</p>
