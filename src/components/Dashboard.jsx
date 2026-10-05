@@ -4,15 +4,16 @@ import { StageChip, BrandChip, NumChip, WaitChip, People } from './Badges.jsx';
 import ReviewBox from './ReviewBox.jsx';
 import { effectiveAssignees } from '../people.js';
 import { TaskEditorFor } from './TaskEditor.jsx';
+import { SeriesDetail, InProgressDetail, BackBar } from './DashDetail.jsx';
 import { ChannelChip, ContentStatusChip, ContentReviewBox, canApproveContent } from './Content.jsx';
 
-function SeriesProgress({ videos }) {
+function SeriesProgress({ videos, onOpen }) {
   const series = videos.filter((v) => v.brand === 'NuCoat');
   const delivered = series.filter((v) => v.stage === 'delivered').length;
   const waiting = series.filter((v) => v.waiting_on_brady).length;
   return (
-    <div className="panel" style={{ marginBottom: '16px' }}>
-      <h3>Compliance series progress</h3>
+    <div className="panel clickable" style={{ marginBottom: '16px' }} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); }}>
+      <h3>Compliance series progress <span className="linkbtn">See every video &rarr;</span></h3>
       <div className="seg" aria-label="Series progress">
         {series.map((v) => (
           <i key={v.id} title={`#${v.number} ${v.title}`} className={v.stage === 'delivered' ? 'on' : v.stage === 'script' ? '' : 'mid'} />
@@ -27,7 +28,7 @@ function SeriesProgress({ videos }) {
   );
 }
 
-function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions }) {
+function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions, all }) {
   const waitingVideos = videos.filter((v) => v.stage === 'client_approval' || v.stage === 'client_review');
   const waitingContent = contentItems.filter((c) => c.status === 'in_review').sort((a, b) => a.publish_date.localeCompare(b.publish_date));
   const total = waitingVideos.length + waitingContent.length;
@@ -52,7 +53,7 @@ function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions })
           <ReviewBox video={v} onReview={actions.reviewVideo} />
         </div>
       ))}
-      {waitingContent.slice(0, 8).map((c) => (
+      {(all ? waitingContent : waitingContent.slice(0, 8)).map((c) => (
         <div key={c.id} style={{ borderBottom: '1px solid var(--line)', padding: '12px 0' }}>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' }}>
             <span className="mono" style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>{fmtDate(c.publish_date)}</span>
@@ -71,14 +72,16 @@ function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions })
               : <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)' }}>Waiting for another editor to approve.</div>}
         </div>
       ))}
-      {waitingContent.length > 8 && <button className="linkbtn" style={{ marginTop: '8px' }} onClick={() => goTab('content')}>See all {waitingContent.length} posts waiting &rarr;</button>}
+      {!all && waitingContent.length > 8 && <button className="linkbtn" style={{ marginTop: '8px' }} onClick={() => goTab('content')}>See all {waitingContent.length} posts waiting &rarr;</button>}
     </div>
   );
 }
 
 function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openVideo, goTab, actions }) {
+  const [view, setView] = React.useState(null);
   const delivered = videos.filter((v) => v.stage === 'delivered').slice(-4).reverse();
   const myRequests = requests.filter((r) => r.requested_by === me.id && OPEN_REQUEST_STATUSES.includes(r.status));
+  if (view === 'series') return <SeriesDetail videos={videos} openVideo={openVideo} onBack={() => { setView(null); window.scrollTo(0, 0); }} />;
   return (
     <>
       <div className="section-head">
@@ -87,7 +90,7 @@ function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openV
           <p>Here is what needs your sign-off, and where the series stands.</p>
         </div>
       </div>
-      <SeriesProgress videos={videos} />
+      <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />
       <div className="stack">
         <ApprovalsPanel me={me} videos={videos} contentItems={contentItems} openVideo={openVideo} goTab={goTab} actions={actions} />
         <div className="grid2">
@@ -114,6 +117,9 @@ function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openV
 
 export default function Dashboard(props) {
   const [editingTask, setEditingTask] = React.useState(null);
+  const [view, setView] = React.useState(null); // null | 'series' | 'progress' | 'waiting'
+  const [shootVideo, setShootVideo] = React.useState('');
+  const [shootDate, setShootDate] = React.useState('');
   const { role, me, videos, contentItems, tasks, requests, timeEntries, settings, estimates, profiles, openVideo, goTab, actions } = props;
   if (!isStaff(role)) return <ReviewerDashboard {...props} />;
 
@@ -141,6 +147,21 @@ export default function Dashboard(props) {
   const pct = Math.min(100, (weekLogged / cap) * 100);
   const meterClass = weekLogged > cap ? 'over' : weekLogged >= cap * 0.8 ? 'warn' : '';
 
+  const back = () => { setView(null); window.scrollTo(0, 0); };
+  if (view === 'series') return <SeriesDetail videos={videos} openVideo={openVideo} onBack={back} />;
+  if (view === 'progress') return <InProgressDetail videos={videos} openVideo={openVideo} onBack={back} />;
+  if (view === 'waiting') {
+    return (
+      <>
+        <BackBar onBack={back} title="Waiting on approval" sub="Videos and posts that need a decision. Approve or ask for changes right here." />
+        <ApprovalsPanel me={me} videos={videos} contentItems={contentItems} openVideo={openVideo} goTab={goTab} actions={actions} all />
+      </>
+    );
+  }
+
+  const open = (fn) => ({ role: 'button', tabIndex: 0, onClick: fn, onKeyDown: (e) => { if (e.key === 'Enter') fn(); } });
+  const schedulable = videos.filter((v) => v.stage !== 'delivered').sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+
   return (
     <>
       <div className="section-head">
@@ -150,17 +171,17 @@ export default function Dashboard(props) {
         </div>
       </div>
 
-      <SeriesProgress videos={videos} />
+      <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />
 
       <div className="tiles">
-        <div className="tile"><div className="num">{inProgress.length}</div><div className="lbl">Videos in progress</div></div>
-        <div className={`tile ${waiting.length + contentWaiting.length ? 'accent' : ''}`}><div className="num">{waiting.length + contentWaiting.length}</div><div className="lbl">Waiting on approval</div></div>
-        <div className="tile"><div className="num">{myTasks.length}</div><div className="lbl">Your open tasks</div></div>
-        <div className="tile"><div className="num">{openRequests.length}</div><div className="lbl">Open requests</div></div>
+        <div className="tile clickable" {...open(() => { setView('progress'); window.scrollTo(0, 0); })}><div className="num">{inProgress.length}</div><div className="lbl">Videos in progress</div></div>
+        <div className={`tile clickable ${waiting.length + contentWaiting.length ? 'accent' : ''}`} {...open(() => { setView('waiting'); window.scrollTo(0, 0); })}><div className="num">{waiting.length + contentWaiting.length}</div><div className="lbl">Waiting on approval</div></div>
+        <div className="tile clickable" {...open(() => goTab('tasks'))}><div className="num">{myTasks.length}</div><div className="lbl">Your open tasks</div></div>
+        <div className="tile clickable" {...open(() => goTab('requests'))}><div className="num">{openRequests.length}</div><div className="lbl">Open requests</div></div>
       </div>
 
       {owner && (
-        <div className="panel" style={{ marginBottom: '16px', cursor: 'pointer' }} onClick={() => goTab('hours')}>
+        <div className="panel clickable" style={{ marginBottom: '16px' }} {...open(() => goTab('hours'))}>
           <h3>Retainer hours this week <span className="mono" style={{ fontSize: '12px' }}>{hrs(weekLogged)} of {hrs(cap)}</span></h3>
           <div className={`meter ${meterClass}`}><span style={{ width: `${pct}%` }} /></div>
           <div className="meter-row">
@@ -220,6 +241,20 @@ export default function Dashboard(props) {
               <span className="mono" style={{ fontSize: '11px' }}>{fmtDate(v.shoot_date)}</span>
             </div>
           )) : <div className="empty">No shoots scheduled in the next two weeks.</div>}
+          <div className="mini-form" style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--ink-soft)', marginBottom: '6px' }}>Schedule a shoot here, or open any video and set its Shoot date.</div>
+            <div className="row-actions">
+              <select value={shootVideo} onChange={(e) => setShootVideo(e.target.value)} aria-label="Video to schedule" style={{ flex: 1, minWidth: '150px' }}>
+                <option value="">Pick a video</option>
+                {schedulable.map((v) => <option key={v.id} value={v.id}>#{String(v.number).padStart(2, '0')} {v.title}</option>)}
+              </select>
+              <input type="date" value={shootDate} onChange={(e) => setShootDate(e.target.value)} aria-label="Shoot date" />
+              <button
+                className="btn sm accent" disabled={!shootVideo || !shootDate}
+                onClick={async () => { await actions.saveVideo(shootVideo, { shoot_date: shootDate }); setShootVideo(''); setShootDate(''); }}
+              >Schedule</button>
+            </div>
+          </div>
         </div>
         <div className="panel">
           <h3>{owner ? 'Requests to triage' : 'Open requests'} <button className="linkbtn" onClick={() => goTab('requests')}>Requests</button></h3>

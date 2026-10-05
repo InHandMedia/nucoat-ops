@@ -378,3 +378,18 @@ input[type=text].titleinput{ font-size:26px; border:none; padding:0; width:100%;
 .panel.dropping{ outline:2px dashed var(--accent); outline-offset:2px; background:var(--accent-tint); }
 .content-row[draggable="true"] .content-line{ cursor:grab; }
 .content-row[draggable="true"]:active{ opacity:.55; }
+
+/* ---------- clickable dashboard widgets + detail views ---------- */
+.tile.clickable, .panel.clickable{ cursor:pointer; transition:border-color .12s, transform .12s; }
+.tile.clickable:hover, .panel.clickable:hover{ border-color:var(--accent); }
+.tile.clickable:active{ transform:translateY(1px); }
+.tile.clickable:focus-visible, .panel.clickable:focus-visible, .series-card:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.panel.clickable h3 .linkbtn{ font-size:12px; font-weight:700; }
+.series-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+.series-card{ min-height:110px; }
+.series-card.is-delivered{ border:2px solid var(--accent); background:var(--accent-tint); }
+.series-card:not(.is-delivered){ opacity:.92; }
+.deliv-badge{ margin-left:auto; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#fff; background:var(--accent); border-radius:99px; padding:2px 8px; }
+.green-done .series-card.is-delivered{ border-color:#1F8A5F; background:#E6F6EC; }
+.green-done .series-card.is-delivered .deliv-badge{ background:#1F8A5F; }
+@media (max-width:460px){ .series-grid{ grid-template-columns:1fr; } }

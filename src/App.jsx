@@ -33,6 +33,7 @@ export default function App() {
   const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedVideoId, setSelectedVideoId] = useState(null);
+  const [dashKey, setDashKey] = useState(0); // bumping this resets the dashboard to its main view
   const [data, setData] = useState(EMPTY);
   const [toast, setToast] = useState('');
   const [editingName, setEditingName] = useState(false);
@@ -190,6 +191,7 @@ export default function App() {
     window.scrollTo(0, 0);
   }
   function goTab(key) {
+    if (key === 'dashboard') setDashKey((n) => n + 1);
     setActiveTab(key);
     setSelectedVideoId(null);
     window.scrollTo(0, 0);
@@ -249,7 +251,7 @@ export default function App() {
         </div>
       </header>
       <main>
-        {tab === 'dashboard' && <Dashboard {...common} />}
+        {tab === 'dashboard' && <Dashboard key={dashKey} {...common} />}
         {tab === 'tasks' && <MyTasks {...common} />}
         {tab === 'series' && (selectedVideo
           ? <VideoDetail key={selectedVideo.id} video={selectedVideo} {...common} onBack={() => setSelectedVideoId(null)} />
