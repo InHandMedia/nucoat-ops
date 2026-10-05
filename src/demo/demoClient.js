@@ -19,7 +19,7 @@ export function createDemoClient() {
   const isStaff = () => role() === 'owner' || role() === 'editor';
 
   const OWNER_ONLY = ['request_estimates', 'time_entries', 'billing_settings'];
-  const STAFF_ONLY = ['video_internal', 'checklist_items', 'tasks'];
+  const STAFF_ONLY = ['video_internal', 'checklist_items', 'tasks', 'metrics', 'metric_entries'];
 
   function canRead(table) {
     if (!currentUserId) return false;
@@ -56,7 +56,9 @@ export function createDemoClient() {
     video_comments: () => ({ id: uid(), author: currentUserId, kind: 'comment', body: '', created_at: nowISO() }),
     checklist_items: () => ({ id: uid(), done: false, position: 99, created_at: nowISO() }),
     content_items: () => ({ id: uid(), brand: 'NuCoat', channel: 'instagram', kind: 'other', brief: '', caption: '', asset_link: '', notes: '', video_id: null, status: 'draft', created_by: currentUserId, reviewed_by: null, reviewed_at: null, created_at: nowISO(), updated_at: nowISO() }),
-    content_comments: () => ({ id: uid(), author: currentUserId, kind: 'comment', body: '', created_at: nowISO() })
+    content_comments: () => ({ id: uid(), author: currentUserId, kind: 'comment', body: '', created_at: nowISO() }),
+    metrics: () => ({ id: uid(), brand: 'NuCoat', detail: '', unit: '', kind: 'number', rollup: 'latest', baseline: null, target: null, target_label: '', relative: false, monthly_targets: null, target_date: null, owner_label: '', notes: '', position: 99, created_by: currentUserId, created_at: nowISO() }),
+    metric_entries: () => ({ id: uid(), note: '', entry_date: new Date().toISOString().slice(0, 10), created_by: currentUserId, created_at: nowISO() })
   };
 
   function notify(table) {
@@ -177,6 +179,11 @@ export function createDemoClient() {
         db.tasks.forEach((t) => { if (ids.includes(t.video_id)) t.video_id = null; });
         db.content_items.forEach((t) => { if (ids.includes(t.video_id)) t.video_id = null; });
         ['checklist_items', 'video_internal', 'video_comments', 'tasks'].forEach(notify);
+      }
+      if (table === 'metrics') {
+        const ids = rows.map((r) => r.id);
+        db.metric_entries = db.metric_entries.filter((e) => !ids.includes(e.metric_id));
+        notify('metric_entries');
       }
       if (table === 'content_items') {
         const ids = rows.map((r) => r.id);

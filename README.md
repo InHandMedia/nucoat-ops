@@ -48,7 +48,7 @@ the owner account can read.
 4. Under **Authentication > Providers**, make sure public sign-ups are off. Only accounts you add by hand should exist.
 5. **Project Settings > Data API**: copy the **Project URL** and the **anon public** key.
 6. Jodi, Marcel and Brady are **Editors** automatically. Sign in as Alistair, open the **Team** tab, and set each person's display name.
-7. **Import the sheet data (optional, once):** SQL Editor > New query > paste `supabase/seed_from_sheets.sql` > Run. It loads the open tasks and the 10/5 onward email and social calendar from the two marketing sheets. Run it after the accounts exist, and only once.
+7. **Import the sheet data (optional, once):** SQL Editor > New query > paste `supabase/seed_from_sheets.sql` > Run. It loads the open tasks and the 10/5 onward email and social calendar from the two marketing sheets. Run it after the accounts exist, and only once. It also loads the starter goals for the Metrics tab.
 
 ## 2. Deploy
 
@@ -79,6 +79,10 @@ Trigger a redeploy so they take effect. Give Brady the site address and his logi
 - **Hours (owner only):** weekly meter against the included hours, overage in hours and dollars, what accepted requests still need, and the last 8 weeks. Retainer terms (10 hours, $300, overage rate) are editable. Leave the overage rate blank to pro-rate it from the fee and hours.
 - **Tasks:** to-dos assignable to one person or several, optionally tied to a video. They show on that person's Dashboard.
 - **Rename videos:** open a video and edit the title at the top, then Save.
+- **Metrics tab (Owner and Editors):** the top block is worked out from the app itself (videos delivered, posts and emails marked Posted, tasks finished, tasks per person). Below it are the goals from the Goals & Metrics sheet. Log a number (about five minutes on Fridays); each goal can count as the latest number, a running total, or a total for the month. Add your own with "+ New metric".
+- **Green when done:** the "Green" switch next to Sign out shows finished tasks, posted content, delivered videos, done requests and goals that hit their target in green. It is saved per person and is off by default.
+- **Task owners:** tasks from the sheets name people ("Ali Bea / Brady"). Anyone whose profile name starts with that first name sees the task on their list; "Link them" saves it permanently. Use the pencil on a task to edit anything about it, including who it is assigned to.
+- **Upgrading an existing project:** run `supabase/migration_02_metrics_and_assignments.sql` once (safe to run again).
 
 ## Updating later
 

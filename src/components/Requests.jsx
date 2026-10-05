@@ -157,7 +157,7 @@ export default function Requests({ role, me, requests, profiles, videos, estimat
           const logged = timeEntries.filter((t) => t.request_id === r.id).reduce((s, t) => s + Number(t.hours), 0);
           const v = videoMap[r.video_id];
           return (
-            <div className="trend-item" key={r.id}>
+            <div className="trend-item" key={r.id} data-done={r.status === 'done' ? 'true' : 'false'}>
               <div className="top">
                 <div>
                   <span className="title">{r.title}</span>

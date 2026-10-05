@@ -428,6 +428,57 @@ alter publication supabase_realtime add table public.request_estimates;
 alter publication supabase_realtime add table public.time_entries;
 alter publication supabase_realtime add table public.billing_settings;
 
+-- ============================================================ metrics (marketing goals + weekly numbers)
+-- Staff only (owner + editors). Each metric is a goal; each entry is one logged number.
+alter table public.profiles add column if not exists show_done_green boolean not null default false;
+
+create table if not exists public.metrics (
+  id uuid primary key default gen_random_uuid(),
+  brand text not null default 'NuCoat' check (brand in ('NuCoat','NuFun')),
+  name text not null,
+  detail text not null default '',           -- how we measure it
+  unit text not null default '',             -- '', '%', '$', '★'
+  kind text not null default 'number' check (kind in ('number','yesno')),
+  rollup text not null default 'latest' check (rollup in ('latest','sum','month')),
+  baseline numeric,                          -- starting point (blank = use the first logged number)
+  target numeric,
+  target_label text not null default '',     -- shown next to the target, e.g. '5 / month'
+  relative boolean not null default false,   -- true: the target is a gain over the baseline (+1,000)
+  monthly_targets jsonb,                     -- optional {"2026-10":60,"2026-11":85}
+  target_date date,
+  owner_label text not null default '',
+  notes text not null default '',
+  position int not null default 0,
+  source text default '',
+  created_by uuid references public.profiles(id) default auth.uid(),
+  created_at timestamptz default now()
+);
+
+create table if not exists public.metric_entries (
+  id uuid primary key default gen_random_uuid(),
+  metric_id uuid not null references public.metrics(id) on delete cascade,
+  entry_date date not null default current_date,
+  value numeric not null,
+  note text not null default '',
+  created_by uuid references public.profiles(id) default auth.uid(),
+  created_at timestamptz default now()
+);
+create index if not exists metric_entries_metric_idx on public.metric_entries (metric_id, entry_date);
+
+alter table public.metrics enable row level security;
+alter table public.metric_entries enable row level security;
+drop policy if exists "staff metrics" on public.metrics;
+drop policy if exists "staff metric entries" on public.metric_entries;
+create policy "staff metrics" on public.metrics for all using (public.is_staff()) with check (public.is_staff());
+create policy "staff metric entries" on public.metric_entries for all using (public.is_staff()) with check (public.is_staff());
+
+do $$ begin
+  alter publication supabase_realtime add table public.metrics;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.metric_entries;
+exception when duplicate_object then null; end $$;
+
 -- ============================================================ starter content
 -- The 14-video compliance series as placeholders. Rename them in the app.
 insert into public.videos (number, title, brand, stage, talent)

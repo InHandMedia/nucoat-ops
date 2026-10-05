@@ -33,7 +33,7 @@ function Checklist({ video, items, actions }) {
     <div className="panel">
       <h3>Pre-shoot checklist <span className="mono" style={{ fontSize: '12px' }}>{done}/{items.length}</span></h3>
       {items.map((i) => (
-        <div className={`checkitem ${i.done ? 'done' : ''}`} key={i.id}>
+        <div className={`checkitem ${i.done ? 'done' : ''}`} data-done={i.done ? 'true' : 'false'} key={i.id}>
           <input type="checkbox" checked={i.done} onChange={(e) => actions.toggleCheck(i.id, e.target.checked)} />
           <span style={{ flex: 1 }}>{i.title}</span>
           <button className="iconbtn" style={{ width: '24px', height: '24px', fontSize: '11px' }} onClick={() => actions.deleteCheck(i.id)}>&#10005;</button>
@@ -60,7 +60,7 @@ function VideoTasks({ video, tasks, profiles, me, actions }) {
     <div className="panel">
       <h3>Tasks for this video</h3>
       {tasks.length ? tasks.map((t) => (
-        <div className={`checkitem ${t.done ? 'done' : ''}`} key={t.id} style={{ flexWrap: 'wrap' }}>
+        <div className={`checkitem ${t.done ? 'done' : ''}`} data-done={t.done ? 'true' : 'false'} key={t.id} style={{ flexWrap: 'wrap' }}>
           <input type="checkbox" checked={t.done} onChange={(e) => actions.toggleTask(t.id, e.target.checked)} />
           <span style={{ flex: 1 }}>{t.title}</span>
           <People ids={t.assigned_to} profileMap={profileMap} />

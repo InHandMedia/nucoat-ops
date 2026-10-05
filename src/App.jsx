@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard.jsx';
 import MyTasks from './components/MyTasks.jsx';
 import Series from './components/Series.jsx';
 import Content from './components/Content.jsx';
+import Metrics from './components/Metrics.jsx';
 import VideoDetail from './components/VideoDetail.jsx';
 import CalendarView from './components/CalendarView.jsx';
 import Requests from './components/Requests.jsx';
@@ -15,13 +16,15 @@ import { RolePill } from './components/Badges.jsx';
 
 const EMPTY = {
   profiles: [], videos: [], internal: [], checklist: [], comments: [],
-  tasks: [], contentItems: [], contentComments: [], requests: [], estimates: [], timeEntries: [], settings: null
+  tasks: [], contentItems: [], contentComments: [], metrics: [], metricEntries: [], requests: [], estimates: [], timeEntries: [], settings: null
 };
 
 function tabsFor(role) {
   const tabs = [['dashboard', 'Dashboard']];
   if (isStaff(role)) tabs.push(['tasks', 'Tasks']);
-  tabs.push(['series', 'Series'], ['content', 'Content'], ['calendar', 'Calendar'], ['requests', 'Requests']);
+  tabs.push(['series', 'Series'], ['content', 'Content'], ['calendar', 'Calendar']);
+  if (isStaff(role)) tabs.push(['metrics', 'Metrics']);
+  tabs.push(['requests', 'Requests']);
   if (isOwner(role)) tabs.push(['hours', 'Hours'], ['team', 'Team']);
   return tabs;
 }
@@ -51,7 +54,7 @@ export default function App() {
     const staff = isStaff(role);
     const owner = isOwner(role);
     const empty = Promise.resolve({ data: [] });
-    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs] = await Promise.all([
+    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs, mt, me] = await Promise.all([
       supabase.from('videos').select('*').order('number', { ascending: true }),
       staff ? supabase.from('video_internal').select('*') : empty,
       staff ? supabase.from('checklist_items').select('*').order('position', { ascending: true }) : empty,
@@ -62,7 +65,9 @@ export default function App() {
       supabase.from('requests').select('*').order('created_at', { ascending: false }),
       owner ? supabase.from('request_estimates').select('*') : empty,
       owner ? supabase.from('time_entries').select('*').order('entry_date', { ascending: false }) : empty,
-      owner ? supabase.from('billing_settings').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null })
+      owner ? supabase.from('billing_settings').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null }),
+      staff ? supabase.from('metrics').select('*').order('position', { ascending: true }) : empty,
+      staff ? supabase.from('metric_entries').select('*').order('entry_date', { ascending: true }) : empty
     ]);
     setData({
       profiles: profiles || [],
@@ -73,6 +78,8 @@ export default function App() {
       tasks: t.data || [],
       contentItems: ct.data || [],
       contentComments: cc.data || [],
+      metrics: mt.data || [],
+      metricEntries: me.data || [],
       requests: r.data || [],
       estimates: re.data || [],
       timeEntries: te.data || [],
@@ -83,7 +90,7 @@ export default function App() {
   useEffect(() => {
     if (!userId) { setData(EMPTY); return undefined; }
     loadAll();
-    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'requests', 'request_estimates', 'time_entries', 'billing_settings'];
+    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'metrics', 'metric_entries', 'requests', 'request_estimates', 'time_entries', 'billing_settings'];
     let ch = supabase.channel('nucoat-live');
     tables.forEach((table) => { ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, loadAll); });
     ch.subscribe();
@@ -133,6 +140,13 @@ export default function App() {
     addTask: (row) => run(supabase.from('tasks').insert({ ...row, created_by: userId })),
     toggleTask: (id, done) => run(supabase.from('tasks').update({ done }).eq('id', id)),
     deleteTask: (id) => run(supabase.from('tasks').delete().eq('id', id)),
+    updateTask: (id, patch) => run(supabase.from('tasks').update(patch).eq('id', id)),
+    async updateTasks(list) {
+      const results = await Promise.all(list.map(([id, patch]) => supabase.from('tasks').update(patch).eq('id', id)));
+      const bad = results.find((r) => r?.error);
+      if (bad) say(bad.error.message); else say(`Linked ${list.length} task${list.length === 1 ? '' : 's'}`);
+      loadAll();
+    },
     // content calendar
     async addContent(row) {
       const res = await supabase.from('content_items').insert({ ...row, created_by: userId });
@@ -145,6 +159,12 @@ export default function App() {
     reviewContent: (id, decision, note) => run(supabase.rpc('review_content', { p_item: id, p_decision: decision, p_note: note || '' })),
     addContentComment: (id, body) => run(supabase.from('content_comments').insert({ content_id: id, author: userId, kind: 'comment', body })),
     deleteContentComment: (id) => run(supabase.from('content_comments').delete().eq('id', id)),
+    // metrics
+    addMetric: (row) => run(supabase.from('metrics').insert({ ...row, created_by: userId })),
+    saveMetric: (id, patch) => run(supabase.from('metrics').update(patch).eq('id', id)),
+    deleteMetric: (id) => run(supabase.from('metrics').delete().eq('id', id)),
+    addEntry: (row) => run(supabase.from('metric_entries').insert({ ...row, created_by: userId })),
+    deleteEntry: (id) => run(supabase.from('metric_entries').delete().eq('id', id)),
     // requests
     addRequest: (row) => run(supabase.from('requests').insert({ ...row, requested_by: userId, status: 'submitted' })),
     updateRequest: (id, patch) => run(supabase.from('requests').update(patch).eq('id', id)),
@@ -178,7 +198,7 @@ export default function App() {
   const selectedVideo = selectedVideoId ? data.videos.find((v) => v.id === selectedVideoId) : null;
 
   return (
-    <div id="app">
+    <div id="app" className={me.show_done_green ? 'green-done' : ''}>
       {isDemo && (
         <div className="demo-banner">
           <b>Demo mode</b>: sample data, nothing is saved. Viewing as{' '}
@@ -217,6 +237,11 @@ export default function App() {
             </span>
           )}
           <RolePill role={role} />
+          <button
+            type="button" className={`greentoggle ${me.show_done_green ? 'on' : ''}`} aria-pressed={!!me.show_done_green}
+            title="Show finished tasks, posts and videos in green. Only changes your own view."
+            onClick={() => actions.updateProfile(userId, { show_done_green: !me.show_done_green })}
+          ><i />Green</button>
           <button onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
       </header>
@@ -228,6 +253,7 @@ export default function App() {
           : <Series {...common} />)}
         {tab === 'content' && <Content {...common} />}
         {tab === 'calendar' && <CalendarView {...common} />}
+        {tab === 'metrics' && <Metrics {...common} />}
         {tab === 'requests' && <Requests {...common} />}
         {tab === 'hours' && <Hours {...common} />}
         {tab === 'team' && <Team {...common} />}

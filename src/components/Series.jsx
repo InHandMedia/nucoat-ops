@@ -97,7 +97,7 @@ export default function Series({ role, videos, checklist, profiles, actions, ope
                   const shootSoon = v.shoot_date && v.stage !== 'delivered' && daysFromNow(v.shoot_date) <= 3 && daysFromNow(v.shoot_date) >= 0;
                   const prog = staff && v.stage !== 'delivered' ? progress(v.id) : null;
                   return (
-                    <div className="card vcard" key={v.id} onClick={() => openVideo(v.id)}>
+                    <div className="card vcard" key={v.id} data-done={v.stage === 'delivered' ? 'true' : 'false'} onClick={() => openVideo(v.id)}>
                       <div className="vtop"><NumChip number={v.number} />{v.brand === 'NuFun' && <BrandChip brand="NuFun" />}</div>
                       <div className="title">{v.title}</div>
                       <div className="badges"><FormatChips formats={v.formats} /></div>
@@ -128,7 +128,7 @@ export default function Series({ role, videos, checklist, profiles, actions, ope
             </thead>
             <tbody>
               {list.length ? list.map((v) => (
-                <tr key={v.id} style={{ cursor: 'pointer' }} onClick={() => openVideo(v.id)}>
+                <tr key={v.id} data-done={v.stage === 'delivered' ? 'true' : 'false'} style={{ cursor: 'pointer' }} onClick={() => openVideo(v.id)}>
                   <td data-label="#"><NumChip number={v.number} /></td>
                   <td data-label="Video"><b>{v.title}</b> {v.brand === 'NuFun' && <BrandChip brand="NuFun" />}</td>
                   <td data-label="Stage"><StageChip stage={v.stage} /></td>

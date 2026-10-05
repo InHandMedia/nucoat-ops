@@ -115,6 +115,9 @@ export function buildSeed() {
     { id: id('t'), title: 'Add pictures to the Google and Apple Maps listings', video_id: null, assigned_to: ['u-ali'], owner_label: 'Ali Bea', category: 'SEO', notes: 'First step toward the 3.7 to 4.5 star goal.', due_date: d(-3), done: false, created_by: 'u-ali', created_at: d(-9) },
     { id: id('t'), title: 'Create ink flyer for X203 inks', video_id: null, assigned_to: ['u-brady'], owner_label: 'Brady', category: 'Flyers / TDS', notes: '', due_date: d(14), done: false, created_by: 'u-ali', created_at: d(-9) },
     { id: id('t'), title: 'Move discontinued products on Amazon: list the SKUs, set pricing, manage stock', video_id: null, assigned_to: [], owner_label: 'Heather / Taylor', category: 'NuFun', notes: 'First SKUs live by the end of the month.', due_date: d(25), done: false, created_by: 'u-ali', created_at: d(-9) },
+    { id: id('t'), title: 'Brady: Monday check-in to confirm this week’s email and posts are scheduled', video_id: null, assigned_to: [], owner_label: 'Brady', category: 'Planning', notes: 'Weekly, every Monday.', due_date: d(1), done: false, created_by: 'u-ali', created_at: d(-9) },
+    { id: id('t'), title: 'Align the plan with Jodi', video_id: null, assigned_to: ['u-ali'], owner_label: 'Ali Bea / Jodi', category: 'Planning', notes: '', due_date: d(2), done: false, created_by: 'u-ali', created_at: d(-9) },
+    { id: id('t'), title: 'Instagram grid cleanup', video_id: null, assigned_to: ['u-ali'], owner_label: 'Ali Bea', category: 'Social', notes: '', due_date: d(-2), done: true, created_by: 'u-ali', created_at: d(-9) },
     { id: id('t'), title: 'Matte Canvas NuCoat TDS', video_id: null, assigned_to: [], owner_label: 'Alex Jarvey', category: 'Flyers / TDS', notes: 'Waiting on info on the aqueous matte canvas option.', due_date: null, done: false, created_by: 'u-ali', created_at: d(-9) }
   ];
 
@@ -136,6 +139,8 @@ export function buildSeed() {
     ci(10, 10, 'NuCoat', 'facebook', 'reminder', 'Video 4 article / credibility post', 'draft', { video_id: 'v-4' }),
     ci(11, 10, 'NuFun', 'instagram', 'offer', 'NuFun post: discontinued products', 'draft')
   ];
+  content_items.push(ci(12, -2, 'NuCoat', 'email', 'video', 'Video 3 email', 'posted', { video_id: 'v-3', reviewed_by: 'u-brady', reviewed_at: d(-4) }));
+  content_items.push(ci(13, -1, 'NuCoat', 'facebook', 'takeaway', 'Video 3 takeaway post', 'posted', { video_id: 'v-3', reviewed_by: 'u-brady', reviewed_at: d(-4) }));
   const content_comments = [
     { id: id('cm'), content_id: 'ci-1', author: 'u-brady', kind: 'approved', body: 'Good to go.', created_at: d(-1) },
     { id: id('cm'), content_id: 'ci-5', author: 'u-brady', kind: 'changes', body: 'Please state the offer end date and the discount code.', created_at: d(-1) }
@@ -171,9 +176,30 @@ export function buildSeed() {
   add(addDays(ws, 1), 1.5, 'request', 'Teaser graphic draft', { request_id: 'r-1', video_id: 'v-15' });
   add(addDays(ws, 2), 2, 'content', 'Review notes', { video_id: 'v-5' });
 
+  const mk = (n, brand, name, extra) => ({ id: `m-${n}`, brand, name, detail: '', unit: '', kind: 'number', rollup: 'latest', baseline: null, target: null, target_label: '', relative: false, monthly_targets: null, target_date: null, owner_label: 'Ali Bea', notes: '', position: n, created_by: 'u-ali', created_at: d(-20), ...extra });
+  const month = today.slice(0, 7);
+  const metrics = [
+    mk(1, 'NuCoat', 'Google rating', { unit: '★', baseline: 3.7, target: 4.5, target_date: addDays(today, 150), detail: 'Google Business rating (stars)' }),
+    mk(2, 'NuCoat', 'New Google reviews (Q4)', { rollup: 'sum', baseline: 0, target: 15, target_label: '5 / month', target_date: addDays(today, 85) }),
+    mk(3, 'NuCoat', 'Compliance video views on the website', { rollup: 'month', baseline: 23, target: 110, target_label: 'Oct 60 · Nov 85 · Dec 110', monthly_targets: { [month]: 60 }, detail: 'Entry sessions on the compliance page or a video page' }),
+    mk(4, 'NuCoat', 'YouTube views (compliance videos)', { target: 1000, relative: true, target_label: '+1,000 over the first number logged' }),
+    mk(5, 'NuCoat', 'Instagram grid cleanup', { kind: 'yesno', baseline: 0, target: 1 }),
+    mk(6, 'NuCoat', 'Email click rate', { unit: '%', target_label: 'target to set' }),
+    mk(7, 'NuFun', 'Print calls', { rollup: 'sum', baseline: 0, owner_label: 'Jake', target_label: 'target to set' })
+  ];
+  const metric_entries = [];
+  const me2 = (m, off, value, note = '') => metric_entries.push({ id: id('me'), metric_id: m, entry_date: d(off), value, note, created_by: 'u-ali', created_at: d(off) });
+  me2('m-1', -20, 3.7); me2('m-1', -2, 3.9, 'Two new reviews');
+  me2('m-2', -10, 2); me2('m-2', -3, 3);
+  me2('m-3', -9, 14); me2('m-3', -2, 21);
+  me2('m-4', -12, 4120, 'Baseline'); me2('m-4', -1, 4560);
+  me2('m-5', -4, 1, 'Done');
+  me2('m-6', -6, 1.8); me2('m-6', -1, 2.4);
+  me2('m-7', -8, 14); me2('m-7', -1, 22);
+
   return {
     profiles, videos, video_internal: internal, checklist_items: checklist, video_comments: comments,
-    tasks, content_items, content_comments, requests, request_estimates, time_entries: te,
+    tasks, content_items, content_comments, metrics, metric_entries, requests, request_estimates, time_entries: te,
     billing_settings: [{ id: 1, weekly_cap_hours: 10, weekly_fee: 300, overage_rate: null }]
   };
 }

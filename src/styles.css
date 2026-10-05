@@ -319,3 +319,46 @@ input[type=text].titleinput{ font-size:26px; border:none; padding:0; width:100%;
 .content-detail .mini-h{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:6px 0 8px; font-family:'Karla',sans-serif; }
 .task-meta{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
 .task-cat{ background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); }
+
+/* ---------- metrics ---------- */
+.metric-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; align-items:start; }
+.metric-head{ display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+.metric-name{ font-weight:700; font-size:15px; }
+.metric-nums{ display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin:12px 0 8px; flex-wrap:wrap; }
+.metric-big{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:34px; line-height:1; }
+.metric-cap{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-top:4px; }
+.metric-side{ font-size:12px; color:var(--ink-soft); text-align:right; display:flex; flex-direction:column; gap:2px; }
+.metric-side b{ color:var(--ink); }
+.metric-meter{ margin-bottom:6px; }
+.metric-log{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+.metric-log input[type=number]{ width:130px; }
+.metric-log input[type=date]{ width:140px; }
+.metric-log input[type=text]{ flex:1; min-width:110px; }
+.autogrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px 22px; }
+.autobar-top{ display:flex; justify-content:space-between; gap:8px; font-size:13px; margin-bottom:5px; }
+.autobar-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:4px; }
+
+/* ---------- green when done (each person's own switch) ---------- */
+.greentoggle{ display:inline-flex; align-items:center; gap:6px; background:var(--surface-2) !important; border:1px solid var(--line) !important; border-radius:99px; padding:3px 9px 3px 5px !important; text-decoration:none !important; font-weight:700; color:var(--ink-soft) !important; }
+.greentoggle i{ width:22px; height:12px; border-radius:99px; background:#C5CBD6; position:relative; flex:none; transition:background .15s; }
+.greentoggle i::after{ content:''; position:absolute; top:2px; left:2px; width:8px; height:8px; border-radius:99px; background:#fff; transition:transform .15s; }
+.greentoggle.on{ color:#14663F !important; border-color:#1F8A5F !important; background:#E6F6EC !important; }
+.greentoggle.on i{ background:#1F8A5F; }
+.greentoggle.on i::after{ transform:translateX(10px); }
+
+.green-done .checkitem[data-done="true"],
+.green-done .rowline[data-done="true"],
+.green-done .content-row[data-done="true"] .content-line{ background:#E6F6EC; border-left:3px solid #1F8A5F; padding-left:8px; border-radius:6px; }
+.green-done .checkitem[data-done="true"] span,
+.green-done .content-row[data-done="true"] .ctitle{ color:#14663F; }
+.green-done .checkitem[data-done="true"] input[type=checkbox]{ accent-color:#1F8A5F; }
+.green-done .card.vcard[data-done="true"],
+.green-done .trend-item[data-done="true"],
+.green-done .panel.metric-card[data-done="true"],
+.green-done .autobar[data-done="true"]{ background:#E6F6EC; border-color:#1F8A5F; }
+.green-done .autobar[data-done="true"]{ border:1px solid #1F8A5F; border-radius:10px; padding:8px 10px; }
+.green-done tr[data-done="true"] td{ background:#E6F6EC; }
+.green-done .content-row[data-done="true"] .chip:not(.nucoat):not(.nufun){ background:#CDEEDA !important; color:#14663F !important; }
+.green-done .metric-card[data-done="true"] .meter > span,
+.green-done .autobar[data-done="true"] .meter > span{ background:#1F8A5F; }
+@media (max-width:460px){ .metric-grid{ grid-template-columns:1fr; } .greentoggle{ padding:2px 7px 2px 4px !important; } }

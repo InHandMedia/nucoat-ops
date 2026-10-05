@@ -2,6 +2,7 @@ import React from 'react';
 import { isOwner, isStaff, todayISO, addDays, daysFromNow, fmtDate, weekStartISO, hrs, OPEN_REQUEST_STATUSES } from '../constants.js';
 import { StageChip, BrandChip, NumChip, WaitChip, People } from './Badges.jsx';
 import ReviewBox from './ReviewBox.jsx';
+import { effectiveAssignees } from '../people.js';
 import { ChannelChip, ContentStatusChip, ContentReviewBox, canApproveContent } from './Content.jsx';
 
 function SeriesProgress({ videos }) {
@@ -118,7 +119,7 @@ export default function Dashboard(props) {
   const waiting = videos.filter((v) => v.waiting_on_brady);
   const contentWaiting = contentItems.filter((c) => c.status === 'in_review');
   const contentDrafts = contentItems.filter((c) => c.status === 'draft' && c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7));
-  const myTasks = tasks.filter((t) => !t.done && (t.assigned_to || []).includes(me.id))
+  const myTasks = tasks.filter((t) => !t.done && effectiveAssignees(t, profiles).includes(me.id))
     .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'));
   const openRequests = requests.filter((r) => OPEN_REQUEST_STATUSES.includes(r.status));
   const newRequests = requests.filter((r) => r.status === 'submitted');
@@ -190,7 +191,7 @@ export default function Dashboard(props) {
           <h3>Posts this week <button className="linkbtn" onClick={() => goTab('content')}>Content</button></h3>
           {contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).length
             ? contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).slice(0, 6).map((c) => (
-              <div className="rowline" key={c.id} style={{ cursor: 'pointer' }} onClick={() => goTab('content')}>
+              <div className="rowline" key={c.id} data-done={c.status === 'posted' ? 'true' : 'false'} style={{ cursor: 'pointer' }} onClick={() => goTab('content')}>
                 <span><span className="mono" style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>{fmtDate(c.publish_date)}</span> <ChannelChip channel={c.channel} /> {c.title}</span>
                 <ContentStatusChip status={c.status} />
               </div>

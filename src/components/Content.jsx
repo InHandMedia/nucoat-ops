@@ -348,7 +348,7 @@ export default function Content({ me, role, contentItems, contentComments, video
               const expanded = open === i.id;
               const needsMe = canApproveContent(i, me);
               return (
-                <div key={i.id} className={`content-row ${expanded ? 'open' : ''}`}>
+                <div key={i.id} className={`content-row ${expanded ? 'open' : ''}`} data-done={i.status === 'posted' ? 'true' : 'false'}>
                   <div className="content-line" onClick={() => setOpen(expanded ? null : i.id)}>
                     <span className="mono cdate">{dayLabel(i.publish_date)}</span>
                     <ChannelChip channel={i.channel} />
