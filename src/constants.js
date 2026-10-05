@@ -43,6 +43,8 @@ export const CONTENT_STATUSES = [
   { key: 'scheduled', label: 'Scheduled', color: '#0E7C86', tint: '#DDF2F4' },
   { key: 'posted', label: 'Posted', color: '#6B3FB8', tint: '#EFE7FB' }
 ];
+// Green-when-done treats approved, scheduled and posted posts as finished work.
+export const isContentDone = (status) => ['approved', 'scheduled', 'posted'].includes(status);
 export function contentStatusInfo(key) {
   return CONTENT_STATUSES.find((s) => s.key === key) || CONTENT_STATUSES[0];
 }

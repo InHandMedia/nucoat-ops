@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { STAGES, BRANDS, FORMATS, CLIENT_STAGES, isOwner, isStaff, fmtDate } from '../constants.js';
 import { StageChip, BrandChip, NumChip, WaitChip, ApprovalChip, FormatChips, People } from './Badges.jsx';
 import ReviewBox from './ReviewBox.jsx';
+import { TaskEditorFor } from './TaskEditor.jsx';
+import { effectiveAssignees, outsideLabel } from '../people.js';
 
 const toForm = (v) => ({
   title: v.title || '',
@@ -50,7 +52,8 @@ function Checklist({ video, items, actions }) {
   );
 }
 
-function VideoTasks({ video, tasks, profiles, me, actions }) {
+function VideoTasks({ video, tasks, allTasks, videos, profiles, me, actions }) {
+  const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState('');
   const [assignees, setAssignees] = useState([me.id]);
   const [due, setDue] = useState('');
@@ -63,9 +66,16 @@ function VideoTasks({ video, tasks, profiles, me, actions }) {
         <div className={`checkitem ${t.done ? 'done' : ''}`} data-done={t.done ? 'true' : 'false'} key={t.id} style={{ flexWrap: 'wrap' }}>
           <input type="checkbox" checked={t.done} onChange={(e) => actions.toggleTask(t.id, e.target.checked)} />
           <span style={{ flex: 1 }}>{t.title}</span>
-          <People ids={t.assigned_to} profileMap={profileMap} />
+          <People ids={effectiveAssignees(t, profiles)} profileMap={profileMap} />
+          {outsideLabel(t, profiles) && <span className="badge assignee">{outsideLabel(t, profiles)}</span>}
           {t.due_date && <span className="mono" style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>{fmtDate(t.due_date)}</span>}
+          <button className="iconbtn" title="Edit this task" aria-label="Edit task" style={{ width: '24px', height: '24px', fontSize: '11px' }} onClick={() => setEditingId(editingId === t.id ? null : t.id)}>&#9998;</button>
           <button className="iconbtn" style={{ width: '24px', height: '24px', fontSize: '11px' }} onClick={() => actions.deleteTask(t.id)}>&#10005;</button>
+          {editingId === t.id && (
+            <div style={{ flexBasis: '100%' }}>
+              <TaskEditorFor t={t} profiles={profiles} videos={videos} tasks={allTasks} actions={actions} onClose={() => setEditingId(null)} />
+            </div>
+          )}
         </div>
       )) : <div className="empty" style={{ padding: '6px 0 12px' }}>No tasks yet.</div>}
       <div className="mini-form" style={{ marginTop: '8px' }}>
@@ -130,7 +140,7 @@ function Comments({ video, comments, profiles, me, role, actions }) {
   );
 }
 
-export default function VideoDetail({ video, role, me, profiles, internal, checklist, comments, tasks, actions, onBack }) {
+export default function VideoDetail({ video, role, me, profiles, internal, checklist, comments, tasks, videos, actions, onBack }) {
   const staff = isStaff(role);
   const owner = isOwner(role);
   const [form, setForm] = useState(() => toForm(video));
@@ -222,6 +232,18 @@ export default function VideoDetail({ video, role, me, profiles, internal, check
     </div>
   );
 
+  // Owner only: approve a script or an edit that was never submitted for review.
+  const overridePanel = owner && ['script', 'edit'].includes(video.stage) && (
+    <div className="nudge" style={{ display: 'block' }}>
+      <div style={{ marginBottom: '8px' }}>
+        <b>Owner approval</b>: no need to submit this one. Approve it yourself and it moves straight on to {video.stage === 'script' ? 'the shoot' : 'delivered'}.
+      </div>
+      <button className="btn sm accent" onClick={() => actions.reviewVideo(video.id, 'approved', '')}>
+        {video.stage === 'script' ? 'Approve script myself' : 'Approve video myself'}
+      </button>
+    </div>
+  );
+
   // ---------- Reviewer (read-only) ----------
   if (!staff) {
     return (
@@ -251,6 +273,7 @@ export default function VideoDetail({ video, role, me, profiles, internal, check
     <div>
       {header}
       {reviewPanel}
+      {overridePanel}
       <div className="stack">
         <div className="panel">
           <h3>Overview</h3>
@@ -330,7 +353,7 @@ export default function VideoDetail({ video, role, me, profiles, internal, check
         </div>
 
         <Checklist video={video} items={videoChecklist} actions={actions} />
-        <VideoTasks video={video} tasks={videoTasks} profiles={profiles} me={me} actions={actions} />
+        <VideoTasks video={video} tasks={videoTasks} allTasks={tasks} videos={videos} profiles={profiles} me={me} actions={actions} />
 
         <div className="panel">
           <h3>Internal notes <span className="chip neutral">Hidden from outside reviewers</span></h3>

@@ -166,6 +166,8 @@ create or replace function public.review_video(p_video uuid, p_decision text, p_
 returns void as $$
 declare
   v public.videos;
+  override boolean := false;
+  note text := coalesce(p_note, '');
 begin
   if public.my_role() not in ('reviewer','editor','owner') then
     raise exception 'You do not have permission to approve';
@@ -173,12 +175,17 @@ begin
   select * into v from public.videos where id = p_video;
   if v.id is null then raise exception 'Video not found'; end if;
   if v.stage not in ('client_approval','client_review') then
-    raise exception 'This video is not waiting for review';
+    -- owner override: approve a script or an edit that was never submitted
+    if public.is_owner() and p_decision = 'approved' and v.stage in ('script','edit') then
+      override := true;
+    else
+      raise exception 'This video is not waiting for review';
+    end if;
   end if;
 
   if p_decision = 'approved' then
     update public.videos set
-      stage = case when v.stage = 'client_approval' then 'shoot' else 'delivered' end,
+      stage = case when v.stage in ('client_approval','script') then 'shoot' else 'delivered' end,
       approval_status = 'approved', waiting_on_brady = false
     where id = p_video;
   elsif p_decision = 'changes' then
@@ -190,8 +197,9 @@ begin
     raise exception 'Unknown decision';
   end if;
 
+  if override and note = '' then note := 'Approved by the owner (skipped review)'; end if;
   insert into public.video_comments (video_id, author, kind, body)
-  values (p_video, auth.uid(), p_decision, coalesce(p_note, ''));
+  values (p_video, auth.uid(), p_decision, note);
 end;
 $$ language plpgsql security definer set search_path = public;
 
@@ -281,23 +289,27 @@ create trigger content_before_write
   before insert or update on public.content_items
   for each row execute procedure public.content_guard();
 
--- Approve / Request changes on a post. You cannot approve a post you created yourself.
+-- Approve / Request changes on a post. You cannot approve a post you created yourself (the owner can).
 create or replace function public.review_content(p_item uuid, p_decision text, p_note text default '')
 returns void as $$
 declare
   c public.content_items;
+  owner_approve boolean := public.is_owner() and p_decision = 'approved';
+  note text := coalesce(p_note, '');
+  skipped boolean := false;
 begin
   if public.my_role() not in ('reviewer','editor','owner') then
     raise exception 'You do not have permission to approve';
   end if;
   select * into c from public.content_items where id = p_item;
   if c.id is null then raise exception 'Post not found'; end if;
-  if c.created_by = auth.uid() then
+  if c.created_by = auth.uid() and not owner_approve then
     raise exception 'You cannot approve a post you created. Another editor needs to review it.';
   end if;
-  if c.status <> 'in_review' then
+  if c.status <> 'in_review' and not (owner_approve and c.status in ('draft','changes_requested')) then
     raise exception 'This post is not waiting for approval';
   end if;
+  skipped := owner_approve and (c.status <> 'in_review' or c.created_by = auth.uid());
   perform set_config('app.via_rpc', 'on', true);
   if p_decision = 'approved' then
     update public.content_items set status = 'approved', reviewed_by = auth.uid(), reviewed_at = now() where id = p_item;
@@ -306,8 +318,9 @@ begin
   else
     raise exception 'Unknown decision';
   end if;
+  if skipped and note = '' then note := 'Approved by the owner (skipped review)'; end if;
   insert into public.content_comments (content_id, author, kind, body)
-  values (p_item, auth.uid(), p_decision, coalesce(p_note, ''));
+  values (p_item, auth.uid(), p_decision, note);
 end;
 $$ language plpgsql security definer set search_path = public;
 

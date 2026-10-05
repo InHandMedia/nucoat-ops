@@ -362,3 +362,13 @@ input[type=text].titleinput{ font-size:26px; border:none; padding:0; width:100%;
 .green-done .metric-card[data-done="true"] .meter > span,
 .green-done .autobar[data-done="true"] .meter > span{ background:#1F8A5F; }
 @media (max-width:460px){ .metric-grid{ grid-template-columns:1fr; } .greentoggle{ padding:2px 7px 2px 4px !important; } }
+.green-done .cal-chip.ev[data-done="true"]{ background:#E6F6EC !important; background-image:none !important; color:#14663F !important; border-left-color:#1F8A5F !important; }
+.green-done .cal-day:has(.cal-chip[data-done="true"]):not(:has(.cal-chip[data-done="false"])){ border-color:#1F8A5F; }
+
+/* ---------- drag and drop ---------- */
+.cal-chip.movable{ cursor:grab; }
+.cal-chip.movable:active{ cursor:grabbing; }
+.cal-day.dropping{ border-color:var(--accent); border-width:2px; background:var(--accent-tint); }
+.panel.dropping{ outline:2px dashed var(--accent); outline-offset:2px; background:var(--accent-tint); }
+.content-row[draggable="true"] .content-line{ cursor:grab; }
+.content-row[draggable="true"]:active{ opacity:.55; }

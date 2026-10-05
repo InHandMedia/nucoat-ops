@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   CHANNELS, CONTENT_KINDS, CONTENT_STATUSES, BRANDS, isStaff, isOwner, todayISO, addDays, weekStartISO, weekLabel,
-  parseISO, fmtDate, channelInfo, contentStatusInfo
+  parseISO, fmtDate, channelInfo, contentStatusInfo, isContentDone
 } from '../constants.js';
 import { BrandChip, NumChip } from './Badges.jsx';
 
@@ -14,9 +14,50 @@ export function ContentStatusChip({ status }) {
   return <span className="chip" style={{ background: s.tint, color: s.color }}>{s.label}</span>;
 }
 
+// Draft a plan line from what the post already says (type, channel, brand, linked video).
+export function suggestPlan(f, videos) {
+  const v = videos.find((x) => x.id === f.video_id);
+  const ch = channelInfo(f.channel).label;
+  const vid = v ? `Video ${v.number} (${v.title})` : 'the video';
+  const email = f.channel === 'email';
+  if (f.kind === 'video') {
+    return email
+      ? `VIDEO EMAIL: link to ${vid} and its article on the Safety & Compliance page.`
+      : `VIDEO POST: short vertical cut of ${vid} on ${ch}, with the article linked in the comments.`;
+  }
+  if (f.kind === 'takeaway') return `TAKEAWAY POST: one key point from ${vid}, as text or a simple graphic on ${ch}.`;
+  if (f.kind === 'reminder') {
+    return email
+      ? `REMINDER EMAIL: recap ${vid} and send people back to watch it.`
+      : `REMINDER POST: point back to ${vid} and its article on ${ch}. Keep it credibility-focused, not salesy.`;
+  }
+  if (f.kind === 'offer') return `OFFER (${f.brand}): state the offer, the end date and the code on ${ch}.`;
+  return `${email ? 'Email' : `${ch} post`} for ${f.brand}${v ? ` tied to ${vid}` : ''}. ${f.title ? `Topic: ${f.title}.` : ''}`.trim();
+}
+
+// Can this post be dragged to another day? (staff only; posted posts are history)
+export const canMoveContent = (item, staff) => staff && item.status !== 'posted';
+
+// Move a post to another day. Approved/scheduled posts go back for approval when the date changes
+// (the database enforces this), so ask first.
+export async function moveContent(item, newDate, actions) {
+  if (!newDate || newDate === item.publish_date) return false;
+  if (['approved', 'scheduled'].includes(item.status)) {
+    const ok = window.confirm('This post is already approved. Moving it to another day sends it back for approval. Move it anyway?');
+    if (!ok) return false;
+  }
+  await actions.saveContent(item.id, { publish_date: newDate });
+  return true;
+}
+
 // Can this person approve this post right now? Anyone except the person who created it.
 export function canApproveContent(item, me) {
   return item.status === 'in_review' && item.created_by !== me.id;
+}
+
+// Owner only: approve without submitting (drafts, changes requested) or approve your own post.
+export function canOverrideContent(item, me) {
+  return me.role === 'owner' && (['draft', 'changes_requested'].includes(item.status) || (item.status === 'in_review' && item.created_by === me.id));
 }
 
 // Approve / Request changes box, shared by the Content tab and the Dashboard.
@@ -51,7 +92,7 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
   const staff = isStaff(role);
   const [form, setForm] = useState({
     title: item.title, publish_date: item.publish_date, channel: item.channel, brand: item.brand,
-    kind: item.kind, caption: item.caption || '', asset_link: item.asset_link || '', notes: item.notes || '', video_id: item.video_id || ''
+    kind: item.kind, caption: item.caption || '', asset_link: item.asset_link || '', notes: item.notes || '', video_id: item.video_id || '', brief: item.brief || ''
   });
   const base = useRef(form);
   const [comment, setComment] = useState('');
@@ -62,7 +103,7 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
   useEffect(() => {
     const fresh = {
       title: item.title, publish_date: item.publish_date, channel: item.channel, brand: item.brand,
-      kind: item.kind, caption: item.caption || '', asset_link: item.asset_link || '', notes: item.notes || '', video_id: item.video_id || ''
+      kind: item.kind, caption: item.caption || '', asset_link: item.asset_link || '', notes: item.notes || '', video_id: item.video_id || '', brief: item.brief || ''
     };
     setForm((f) => {
       const next = { ...f };
@@ -86,7 +127,7 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
 
   return (
     <div className="content-detail" onClick={(e) => e.stopPropagation()}>
-      {item.brief && (
+      {!staff && item.brief && (
         <div className="brief"><b>Plan:</b> {item.brief}</div>
       )}
       <div className="meta-line">
@@ -102,7 +143,13 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
           <ContentReviewBox item={item} onReview={actions.reviewContent} />
         </div>
       )}
-      {item.status === 'in_review' && !reviewer && staff && item.created_by === me.id && (
+      {canOverrideContent(item, me) && (
+        <div className="nudge" style={{ display: 'block', margin: '10px 0' }}>
+          <div style={{ marginBottom: '8px' }}><b>Owner approval</b>: no need to wait for anyone. Approve it yourself and it is ready to schedule.</div>
+          <button className="btn sm accent" onClick={() => actions.reviewContent(item.id, 'approved', '')}>Approve it myself</button>
+        </div>
+      )}
+      {item.status === 'in_review' && !reviewer && staff && item.created_by === me.id && !canOverrideContent(item, me) && (
         <div className="meta-line"><span>Waiting for another editor to approve. You cannot approve your own post.</span></div>
       )}
 
@@ -145,6 +192,15 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
           </select>
         </div>
       </div>
+      {(staff || form.brief) && (
+        <div className="field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px' }}>
+            <label htmlFor={`plan-${item.id}`}>Plan (what this post is for)</label>
+            {staff && <button type="button" className="linkbtn" onClick={() => set('brief', suggestPlan(form, videos))}>Auto-fill from the post</button>}
+          </div>
+          <textarea id={`plan-${item.id}`} rows="2" value={form.brief} disabled={!staff} onChange={(e) => set('brief', e.target.value)} placeholder="Short note on the goal, e.g. VIDEO EMAIL: link to the video and its article" style={{ width: '100%' }} />
+        </div>
+      )}
       <div className="field">
         <label>Copy / caption (this is what gets approved)</label>
         <textarea rows="5" value={form.caption} disabled={!staff} onChange={(e) => set('caption', e.target.value)} placeholder="Write the caption or email copy here" style={{ width: '100%' }} />
@@ -222,12 +278,14 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
 }
 
 function NewPostForm({ videos, onCreate, onCancel }) {
-  const [f, setF] = useState({ title: '', publish_date: todayISO(), channel: 'instagram', brand: 'NuCoat', kind: 'other', caption: '', video_id: '' });
+  const [f, setF] = useState({ title: '', publish_date: todayISO(), channel: 'instagram', brand: 'NuCoat', kind: 'other', caption: '', brief: '', video_id: '' });
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   async function submit(e) {
     e.preventDefault();
     if (!f.title.trim()) return;
-    await onCreate({ ...f, title: f.title.trim(), video_id: f.video_id || null, status: 'draft' });
+    const row = { ...f, title: f.title.trim(), video_id: f.video_id || null, status: 'draft' };
+    if (!row.brief.trim()) row.brief = suggestPlan(row, videos);
+    await onCreate(row);
     onCancel();
   }
   return (
@@ -251,6 +309,7 @@ function NewPostForm({ videos, onCreate, onCancel }) {
           </select>
         </div>
       </div>
+      <div className="field"><label>Plan (leave blank and it writes one for you)</label><input type="text" value={f.brief} onChange={(e) => set('brief', e.target.value)} placeholder="What this post is for" /></div>
       <div className="field"><label>Copy / caption</label><textarea rows="3" value={f.caption} onChange={(e) => set('caption', e.target.value)} style={{ width: '100%' }} /></div>
       <div className="row-actions">
         <button className="btn accent sm" type="submit">Add as draft</button>
@@ -267,6 +326,7 @@ export default function Content({ me, role, contentItems, contentComments, video
   const [status, setStatus] = useState('');
   const [earlier, setEarlier] = useState(false);
   const [open, setOpen] = useState(null);
+  const [dropWeek, setDropWeek] = useState(null);
   const [adding, setAdding] = useState(false);
   const today = todayISO();
   const cutoff = addDays(weekStartISO(today), 0);
@@ -336,11 +396,31 @@ export default function Content({ me, role, contentItems, contentComments, video
       {weeks.length ? weeks.map((w) => {
         const drafts = w.items.filter((i) => i.status === 'draft');
         return (
-          <div className="panel" key={w.ws} style={{ marginBottom: '14px' }}>
+          <div
+            className={`panel ${dropWeek === w.ws ? 'dropping' : ''}`} key={w.ws} style={{ marginBottom: '14px' }}
+            onDragOver={staff ? (e) => { e.preventDefault(); if (dropWeek !== w.ws) setDropWeek(w.ws); } : undefined}
+            onDragLeave={staff ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropWeek(null); } : undefined}
+            onDrop={staff ? (e) => {
+              e.preventDefault(); setDropWeek(null);
+              const item = contentItems.find((c) => c.id === e.dataTransfer.getData('text/plain'));
+              if (!item || !canMoveContent(item, staff)) return;
+              // keep the same weekday, shift to this week
+              const offset = Math.round((parseISO(item.publish_date) - parseISO(weekStartISO(item.publish_date))) / 86400000);
+              moveContent(item, addDays(w.ws, offset), actions);
+            } : undefined}
+          >
             <h3>
               <span>Week of {weekLabel(w.ws)} <span className="mono" style={{ fontSize: '11px' }}>{w.items.length}</span></span>
               {staff && drafts.length > 0 && (
-                <button className="linkbtn" onClick={() => actions.submitContent(drafts.map((d) => d.id))}>Submit {drafts.length} draft{drafts.length > 1 ? 's' : ''} for approval</button>
+                <span style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+                  <button className="linkbtn" onClick={() => actions.submitContent(drafts.map((d) => d.id))}>Submit {drafts.length} draft{drafts.length > 1 ? 's' : ''} for approval</button>
+                  {me.role === 'owner' && (
+                    <button
+                      className="linkbtn"
+                      onClick={() => { if (window.confirm(`Approve ${drafts.length} draft${drafts.length > 1 ? 's' : ''} yourself, without sending them to anyone?`)) actions.approveContentMany(drafts.map((d) => d.id)); }}
+                    >Approve {drafts.length} myself</button>
+                  )}
+                </span>
               )}
             </h3>
             {w.items.map((i) => {
@@ -348,7 +428,13 @@ export default function Content({ me, role, contentItems, contentComments, video
               const expanded = open === i.id;
               const needsMe = canApproveContent(i, me);
               return (
-                <div key={i.id} className={`content-row ${expanded ? 'open' : ''}`} data-done={i.status === 'posted' ? 'true' : 'false'}>
+                <div
+                  key={i.id} className={`content-row ${expanded ? 'open' : ''}`} data-done={isContentDone(i.status) ? 'true' : 'false'}
+                  draggable={canMoveContent(i, staff) && !expanded}
+                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', i.id); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragEnd={() => setDropWeek(null)}
+                  title={canMoveContent(i, staff) && !expanded ? 'Drag to another week to move it' : undefined}
+                >
                   <div className="content-line" onClick={() => setOpen(expanded ? null : i.id)}>
                     <span className="mono cdate">{dayLabel(i.publish_date)}</span>
                     <ChannelChip channel={i.channel} />

@@ -1,8 +1,9 @@
 import React from 'react';
-import { isOwner, isStaff, todayISO, addDays, daysFromNow, fmtDate, weekStartISO, hrs, OPEN_REQUEST_STATUSES } from '../constants.js';
+import { isContentDone, isOwner, isStaff, todayISO, addDays, daysFromNow, fmtDate, weekStartISO, hrs, OPEN_REQUEST_STATUSES } from '../constants.js';
 import { StageChip, BrandChip, NumChip, WaitChip, People } from './Badges.jsx';
 import ReviewBox from './ReviewBox.jsx';
 import { effectiveAssignees } from '../people.js';
+import { TaskEditorFor } from './TaskEditor.jsx';
 import { ChannelChip, ContentStatusChip, ContentReviewBox, canApproveContent } from './Content.jsx';
 
 function SeriesProgress({ videos }) {
@@ -65,7 +66,9 @@ function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions })
             : <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)', marginBottom: '8px' }}>No copy written yet.</div>}
           {canApproveContent(c, me)
             ? <ContentReviewBox item={c} onReview={actions.reviewContent} />
-            : <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)' }}>Waiting for another editor to approve.</div>}
+            : me.role === 'owner'
+              ? <button className="btn sm accent" onClick={() => actions.reviewContent(c.id, 'approved', '')}>Approve it myself</button>
+              : <div style={{ fontSize: '12.5px', color: 'var(--ink-soft)' }}>Waiting for another editor to approve.</div>}
         </div>
       ))}
       {waitingContent.length > 8 && <button className="linkbtn" style={{ marginTop: '8px' }} onClick={() => goTab('content')}>See all {waitingContent.length} posts waiting &rarr;</button>}
@@ -110,6 +113,7 @@ function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openV
 }
 
 export default function Dashboard(props) {
+  const [editingTask, setEditingTask] = React.useState(null);
   const { role, me, videos, contentItems, tasks, requests, timeEntries, settings, estimates, profiles, openVideo, goTab, actions } = props;
   if (!isStaff(role)) return <ReviewerDashboard {...props} />;
 
@@ -177,12 +181,18 @@ export default function Dashboard(props) {
             const d = daysFromNow(t.due_date);
             const video = videos.find((v) => v.id === t.video_id);
             return (
-              <div className="rowline" key={t.id}>
+              <div className="rowline" key={t.id} style={{ flexWrap: 'wrap' }}>
                 <label className="check" style={{ flex: 1, color: 'var(--ink)', fontSize: '13px' }}>
                   <input type="checkbox" checked={t.done} onChange={(e) => actions.toggleTask(t.id, e.target.checked)} /> {t.title}
                 </label>
                 {video && <span className="chip neutral" style={{ cursor: 'pointer' }} onClick={() => openVideo(video.id)}>#{String(video.number).padStart(2, '0')}</span>}
                 {t.due_date && <span className="mono" style={{ fontSize: '11px', color: d < 0 ? 'var(--warn)' : 'var(--ink-soft)', fontWeight: d < 0 ? 700 : 400 }}>{d < 0 && '⚠ '}{fmtDate(t.due_date)}</span>}
+                <button className="iconbtn" title="Edit this task" aria-label="Edit task" style={{ width: '24px', height: '24px', fontSize: '11px' }} onClick={() => setEditingTask(editingTask === t.id ? null : t.id)}>&#9998;</button>
+                {editingTask === t.id && (
+                  <div style={{ flexBasis: '100%' }}>
+                    <TaskEditorFor t={t} profiles={profiles} videos={videos} tasks={tasks} actions={actions} onClose={() => setEditingTask(null)} />
+                  </div>
+                )}
               </div>
             );
           }) : <div className="empty">Nothing assigned to you. Nice.</div>}
@@ -191,7 +201,7 @@ export default function Dashboard(props) {
           <h3>Posts this week <button className="linkbtn" onClick={() => goTab('content')}>Content</button></h3>
           {contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).length
             ? contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).slice(0, 6).map((c) => (
-              <div className="rowline" key={c.id} data-done={c.status === 'posted' ? 'true' : 'false'} style={{ cursor: 'pointer' }} onClick={() => goTab('content')}>
+              <div className="rowline" key={c.id} data-done={isContentDone(c.status) ? 'true' : 'false'} style={{ cursor: 'pointer' }} onClick={() => goTab('content')}>
                 <span><span className="mono" style={{ fontSize: '11px', color: 'var(--ink-soft)' }}>{fmtDate(c.publish_date)}</span> <ChannelChip channel={c.channel} /> {c.title}</span>
                 <ContentStatusChip status={c.status} />
               </div>

@@ -224,11 +224,13 @@ export function createDemoClient() {
       if (!['reviewer', 'editor', 'owner'].includes(role())) return err('You do not have permission to approve');
       const c = db.content_items.find((x) => x.id === args.p_item);
       if (!c) return err('Post not found');
-      if (c.created_by === currentUserId) return err('You cannot approve a post you created. Another editor needs to review it.');
-      if (c.status !== 'in_review') return err('This post is not waiting for approval');
+      const ownerApprove = isOwner() && args.p_decision === 'approved';
+      if (c.created_by === currentUserId && !ownerApprove) return err('You cannot approve a post you created. Another editor needs to review it.');
+      if (c.status !== 'in_review' && !(ownerApprove && ['draft', 'changes_requested'].includes(c.status))) return err('This post is not waiting for approval');
+      const skipped = ownerApprove && (c.status !== 'in_review' || c.created_by === currentUserId);
       c.status = args.p_decision === 'approved' ? 'approved' : 'changes_requested';
       c.reviewed_by = currentUserId; c.reviewed_at = nowISO(); c.updated_at = nowISO();
-      db.content_comments.push({ id: uid(), content_id: c.id, author: currentUserId, kind: args.p_decision, body: args.p_note || '', created_at: nowISO() });
+      db.content_comments.push({ id: uid(), content_id: c.id, author: currentUserId, kind: args.p_decision, body: args.p_note || (skipped ? 'Approved by the owner (skipped review)' : ''), created_at: nowISO() });
       notify('content_items'); notify('content_comments');
       return ok(null);
     }
@@ -236,9 +238,13 @@ export function createDemoClient() {
     if (!['reviewer', 'editor', 'owner'].includes(role())) return err('You do not have permission to approve');
     const v = db.videos.find((x) => x.id === args.p_video);
     if (!v) return err('Video not found');
-    if (!['client_approval', 'client_review'].includes(v.stage)) return err('This video is not waiting for review');
+    let override = false;
+    if (!['client_approval', 'client_review'].includes(v.stage)) {
+      if (isOwner() && args.p_decision === 'approved' && ['script', 'edit'].includes(v.stage)) override = true;
+      else return err('This video is not waiting for review');
+    }
     if (args.p_decision === 'approved') {
-      v.stage = v.stage === 'client_approval' ? 'shoot' : 'delivered';
+      v.stage = ['client_approval', 'script'].includes(v.stage) ? 'shoot' : 'delivered';
       v.approval_status = 'approved';
     } else {
       v.stage = v.stage === 'client_approval' ? 'script' : 'edit';
@@ -246,7 +252,7 @@ export function createDemoClient() {
     }
     v.waiting_on_brady = false;
     v.updated_at = nowISO();
-    db.video_comments.push({ id: uid(), video_id: v.id, author: currentUserId, kind: args.p_decision, body: args.p_note || '', created_at: nowISO() });
+    db.video_comments.push({ id: uid(), video_id: v.id, author: currentUserId, kind: args.p_decision, body: args.p_note || (override ? 'Approved by the owner (skipped review)' : ''), created_at: nowISO() });
     notify('videos');
     notify('video_comments');
     return ok(null);

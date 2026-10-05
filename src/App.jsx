@@ -157,6 +157,12 @@ export default function App() {
     deleteContent: (id) => run(supabase.from('content_items').delete().eq('id', id)),
     submitContent: (ids) => run(supabase.from('content_items').update({ status: 'in_review' }).in('id', ids)),
     reviewContent: (id, decision, note) => run(supabase.rpc('review_content', { p_item: id, p_decision: decision, p_note: note || '' })),
+    async approveContentMany(ids) {
+      const results = await Promise.all(ids.map((id) => supabase.rpc('review_content', { p_item: id, p_decision: 'approved', p_note: '' })));
+      const bad = results.find((r) => r?.error);
+      say(bad ? bad.error.message : `Approved ${ids.length} post${ids.length === 1 ? '' : 's'}`);
+      loadAll();
+    },
     addContentComment: (id, body) => run(supabase.from('content_comments').insert({ content_id: id, author: userId, kind: 'comment', body })),
     deleteContentComment: (id) => run(supabase.from('content_comments').delete().eq('id', id)),
     // metrics

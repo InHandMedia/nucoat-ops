@@ -82,7 +82,10 @@ Trigger a redeploy so they take effect. Give Brady the site address and his logi
 - **Metrics tab (Owner and Editors):** the top block is worked out from the app itself (videos delivered, posts and emails marked Posted, tasks finished, tasks per person). Below it are the goals from the Goals & Metrics sheet. Log a number (about five minutes on Fridays); each goal can count as the latest number, a running total, or a total for the month. Add your own with "+ New metric".
 - **Green when done:** the "Green" switch next to Sign out shows finished tasks, posted content, delivered videos, done requests and goals that hit their target in green. It is saved per person and is off by default.
 - **Task owners:** tasks from the sheets name people ("Ali Bea / Brady"). Anyone whose profile name starts with that first name sees the task on their list; "Link them" saves it permanently. Use the pencil on a task to edit anything about it, including who it is assigned to.
-- **Upgrading an existing project:** run `supabase/migration_02_metrics_and_assignments.sql` once (safe to run again).
+- **Owner approval:** you can approve a video or a post without submitting it (and approve your own posts); the override buttons only show for the Owner. Editors still cannot approve a post they created.
+- **Moving posts:** drag a post or email onto another day on the Calendar, or onto another week on the Content tab. Moving an approved post sends it back for approval.
+- **Plan field:** each post has an editable Plan. "Auto-fill from the post" writes one from its type, channel and video; new posts get one automatically.
+- **Upgrading an existing project:** run `supabase/migration_02_metrics_and_assignments.sql` and then `supabase/migration_03_owner_override.sql` once each (safe to run again).
 
 ## Updating later
 
