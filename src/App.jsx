@@ -16,7 +16,7 @@ import { RolePill } from './components/Badges.jsx';
 
 const EMPTY = {
   profiles: [], videos: [], internal: [], checklist: [], comments: [],
-  tasks: [], contentItems: [], contentComments: [], metrics: [], metricEntries: [], requests: [], estimates: [], timeEntries: [], settings: null
+  tasks: [], contentItems: [], contentComments: [], metrics: [], metricEntries: [], requests: [], estimates: [], timeEntries: [], notes: [], settings: null
 };
 
 function tabsFor(role) {
@@ -55,7 +55,7 @@ export default function App() {
     const staff = isStaff(role);
     const owner = isOwner(role);
     const empty = Promise.resolve({ data: [] });
-    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs, mt, me] = await Promise.all([
+    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs, mt, me, nt] = await Promise.all([
       supabase.from('videos').select('*').order('number', { ascending: true }),
       staff ? supabase.from('video_internal').select('*') : empty,
       staff ? supabase.from('checklist_items').select('*').order('position', { ascending: true }) : empty,
@@ -68,7 +68,8 @@ export default function App() {
       owner ? supabase.from('time_entries').select('*').order('entry_date', { ascending: false }) : empty,
       owner ? supabase.from('billing_settings').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null }),
       staff ? supabase.from('metrics').select('*').order('position', { ascending: true }) : empty,
-      staff ? supabase.from('metric_entries').select('*').order('entry_date', { ascending: true }) : empty
+      staff ? supabase.from('metric_entries').select('*').order('entry_date', { ascending: true }) : empty,
+      supabase.from('notes').select('*').order('created_at', { ascending: false })
     ]);
     setData({
       profiles: profiles || [],
@@ -84,6 +85,7 @@ export default function App() {
       requests: r.data || [],
       estimates: re.data || [],
       timeEntries: te.data || [],
+      notes: nt.data || [],
       settings: bs.data || null
     });
   }, [userId]);
@@ -91,7 +93,7 @@ export default function App() {
   useEffect(() => {
     if (!userId) { setData(EMPTY); return undefined; }
     loadAll();
-    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'metrics', 'metric_entries', 'requests', 'request_estimates', 'time_entries', 'billing_settings'];
+    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'metrics', 'metric_entries', 'requests', 'request_estimates', 'time_entries', 'billing_settings', 'notes'];
     let ch = supabase.channel('nucoat-live');
     tables.forEach((table) => { ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, loadAll); });
     ch.subscribe();
@@ -182,6 +184,10 @@ export default function App() {
     addTime: (row) => run(supabase.from('time_entries').insert(row)),
     deleteTime: (id) => run(supabase.from('time_entries').delete().eq('id', id)),
     saveSettings: (patch) => run(supabase.from('billing_settings').update(patch).eq('id', 1)),
+    // notes and pins
+    addNote: (row) => run(supabase.from('notes').insert({ ...row, author: userId })),
+    saveNote: (id, patch) => run(supabase.from('notes').update(patch).eq('id', id)),
+    deleteNote: (id) => run(supabase.from('notes').delete().eq('id', id)),
     // people
     updateProfile: (id, patch) => run(supabase.from('profiles').update(patch).eq('id', id))
   };
