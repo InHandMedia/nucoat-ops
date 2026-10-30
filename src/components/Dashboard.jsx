@@ -5,6 +5,7 @@ import ReviewBox from './ReviewBox.jsx';
 import { effectiveAssignees } from '../people.js';
 import { TaskEditorFor } from './TaskEditor.jsx';
 import { SeriesDetail, InProgressDetail, BackBar } from './DashDetail.jsx';
+import Notes from './Notes.jsx';
 import { ChannelChip, ContentStatusChip, ContentReviewBox, canApproveContent } from './Content.jsx';
 
 function SeriesProgress({ videos, onOpen }) {
@@ -77,7 +78,8 @@ function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions, a
   );
 }
 
-function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openVideo, goTab, actions }) {
+function ReviewerDashboard(props) {
+  const { me, videos, contentItems, requests, profiles, openVideo, goTab, actions } = props;
   const [view, setView] = React.useState(null);
   const delivered = videos.filter((v) => v.stage === 'delivered').slice(-4).reverse();
   const myRequests = requests.filter((r) => r.requested_by === me.id && OPEN_REQUEST_STATUSES.includes(r.status));
@@ -90,6 +92,7 @@ function ReviewerDashboard({ me, videos, contentItems, requests, profiles, openV
           <p>Here is what needs your sign-off, and where the series stands.</p>
         </div>
       </div>
+      <Notes {...props} />
       <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />
       <div className="stack">
         <ApprovalsPanel me={me} videos={videos} contentItems={contentItems} openVideo={openVideo} goTab={goTab} actions={actions} />
@@ -170,6 +173,8 @@ export default function Dashboard(props) {
           <p>Where the NuCoat series stands today.</p>
         </div>
       </div>
+
+      <Notes {...props} />
 
       <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />
 
