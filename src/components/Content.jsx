@@ -340,7 +340,7 @@ export default function Content({ me, role, contentItems, contentComments, video
   const [dropWeek, setDropWeek] = useState(null);
   const [adding, setAdding] = useState(false);
   const [weekOpen, setWeekOpen] = useState({});
-  const [postedOpen, setPostedOpen] = useState(false);
+  const [box, setBox] = useState(null); // which tile's list is open: draft | mine | review | approved | posted
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmBulk, setConfirmBulk] = useState(false);
@@ -383,12 +383,24 @@ export default function Content({ me, role, contentItems, contentComments, video
     await actions.deleteContentMany(ids);
     exitSelect();
   }
-  const postedItems = contentItems.filter((i) => i.status === 'posted').sort((a, b) => b.publish_date.localeCompare(a.publish_date) || a.title.localeCompare(b.title));
-  function togglePosted() {
-    const next = !postedOpen;
-    setPostedOpen(next);
-    if (next) setTimeout(() => document.getElementById('posted-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  const BOXES = {
+    draft: { label: 'Drafts to submit', test: (i) => i.status === 'draft' },
+    mine: { label: 'Waiting on you', test: (i) => canApproveContent(i, me) },
+    review: { label: 'Waiting on approval', test: (i) => i.status === 'in_review' },
+    approved: { label: 'Approved, not yet scheduled', test: (i) => i.status === 'approved' },
+    posted: { label: 'Posted', test: (i) => i.status === 'posted' }
+  };
+  const boxItems = box ? contentItems.filter(BOXES[box].test).sort((a, b) => (box === 'posted' ? b.publish_date.localeCompare(a.publish_date) : a.publish_date.localeCompare(b.publish_date)) || a.title.localeCompare(b.title)) : [];
+  function toggleBox(key) {
+    const next = box === key ? null : key;
+    setBox(next);
+    if (next) setTimeout(() => document.getElementById('status-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
+  const tileProps = (key) => ({
+    role: 'button', tabIndex: 0, onClick: () => toggleBox(key),
+    onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBox(key); } },
+    title: box === key ? 'Hide this list' : 'Show these posts'
+  });
   const selectedShown = selected.filter((id) => filtered.some((i) => i.id === id));
   // This week and next are open; later weeks start collapsed. Filters and selecting open everything.
   const nearCutoff = addDays(weekStartISO(today), 7);
@@ -489,27 +501,22 @@ export default function Content({ me, role, contentItems, contentComments, video
       {adding && <NewPostForm videos={videos} onCreate={actions.addContent} onCancel={() => setAdding(false)} />}
 
       <div className="tiles" style={{ marginBottom: '14px' }}>
-        <div className="tile"><div className="num">{counts.draft}</div><div className="lbl">Drafts to submit</div></div>
-        <div className={`tile ${mine.length ? 'accent' : ''}`}><div className="num">{mine.length}</div><div className="lbl">Waiting on you</div></div>
-        <div className="tile"><div className="num">{counts.review}</div><div className="lbl">Waiting on approval</div></div>
-        <div className="tile"><div className="num">{counts.approved}</div><div className="lbl">Approved, not yet scheduled</div></div>
-        <div
-          className={`tile clickable ${postedOpen ? 'accent' : ''}`} role="button" tabIndex={0}
-          onClick={togglePosted}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePosted(); } }}
-          title={postedOpen ? 'Hide the posted list' : 'Show everything that has been posted'}
-        ><div className="num">{counts.posted}</div><div className="lbl">Posted {postedOpen ? '(hide)' : '(show)'}</div></div>
+        <div className={`tile clickable ${box === 'draft' ? 'accent' : ''}`} {...tileProps('draft')}><div className="num">{counts.draft}</div><div className="lbl">Drafts to submit</div></div>
+        <div className={`tile clickable ${box === 'mine' || (!box && mine.length) ? 'accent' : ''}`} {...tileProps('mine')}><div className="num">{mine.length}</div><div className="lbl">Waiting on you</div></div>
+        <div className={`tile clickable ${box === 'review' ? 'accent' : ''}`} {...tileProps('review')}><div className="num">{counts.review}</div><div className="lbl">Waiting on approval</div></div>
+        <div className={`tile clickable ${box === 'approved' ? 'accent' : ''}`} {...tileProps('approved')}><div className="num">{counts.approved}</div><div className="lbl">Approved, not yet scheduled</div></div>
+        <div className={`tile clickable ${box === 'posted' ? 'accent' : ''}`} {...tileProps('posted')}><div className="num">{counts.posted}</div><div className="lbl">Posted</div></div>
       </div>
 
-      {postedOpen && (
-        <div className="panel" id="posted-box" style={{ marginBottom: '14px' }}>
+      {box && (
+        <div className="panel" id="status-box" style={{ marginBottom: '14px' }}>
           <h3>
-            <span>Posted <span className="mono" style={{ fontSize: '11px' }}>{postedItems.length}</span></span>
-            <button className="linkbtn" onClick={() => setPostedOpen(false)}>Close</button>
+            <span>{BOXES[box].label} <span className="mono" style={{ fontSize: '11px' }}>{boxItems.length}</span></span>
+            <button className="linkbtn" onClick={() => setBox(null)}>Close</button>
           </h3>
-          {postedItems.length
-            ? groupItems(postedItems).map((g) => (g.length === 1 ? renderRow(g[0]) : renderGroup(g)))
-            : <div className="empty">Nothing marked posted yet. Open a post and use Mark posted.</div>}
+          {boxItems.length
+            ? groupItems(boxItems).map((g) => (g.length === 1 ? renderRow(g[0]) : renderGroup(g)))
+            : <div className="empty">Nothing here right now.</div>}
         </div>
       )}
 
