@@ -340,6 +340,7 @@ export default function Content({ me, role, contentItems, contentComments, video
   const [dropWeek, setDropWeek] = useState(null);
   const [adding, setAdding] = useState(false);
   const [weekOpen, setWeekOpen] = useState({});
+  const [postedOpen, setPostedOpen] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmBulk, setConfirmBulk] = useState(false);
@@ -381,6 +382,12 @@ export default function Content({ me, role, contentItems, contentComments, video
     if (!ids.length) return;
     await actions.deleteContentMany(ids);
     exitSelect();
+  }
+  const postedItems = contentItems.filter((i) => i.status === 'posted').sort((a, b) => b.publish_date.localeCompare(a.publish_date) || a.title.localeCompare(b.title));
+  function togglePosted() {
+    const next = !postedOpen;
+    setPostedOpen(next);
+    if (next) setTimeout(() => document.getElementById('posted-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   }
   const selectedShown = selected.filter((id) => filtered.some((i) => i.id === id));
   // This week and next are open; later weeks start collapsed. Filters and selecting open everything.
@@ -487,12 +494,24 @@ export default function Content({ me, role, contentItems, contentComments, video
         <div className="tile"><div className="num">{counts.review}</div><div className="lbl">Waiting on approval</div></div>
         <div className="tile"><div className="num">{counts.approved}</div><div className="lbl">Approved, not yet scheduled</div></div>
         <div
-          className={`tile clickable ${status === 'posted' ? 'accent' : ''}`} role="button" tabIndex={0}
-          onClick={() => setStatus(status === 'posted' ? '' : 'posted')}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatus(status === 'posted' ? '' : 'posted'); } }}
-          title={status === 'posted' ? 'Show everything again' : 'Show only posted'}
-        ><div className="num">{counts.posted}</div><div className="lbl">{status === 'posted' ? 'Posted (showing)' : 'Posted'}</div></div>
+          className={`tile clickable ${postedOpen ? 'accent' : ''}`} role="button" tabIndex={0}
+          onClick={togglePosted}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePosted(); } }}
+          title={postedOpen ? 'Hide the posted list' : 'Show everything that has been posted'}
+        ><div className="num">{counts.posted}</div><div className="lbl">Posted {postedOpen ? '(hide)' : '(show)'}</div></div>
       </div>
+
+      {postedOpen && (
+        <div className="panel" id="posted-box" style={{ marginBottom: '14px' }}>
+          <h3>
+            <span>Posted <span className="mono" style={{ fontSize: '11px' }}>{postedItems.length}</span></span>
+            <button className="linkbtn" onClick={() => setPostedOpen(false)}>Close</button>
+          </h3>
+          {postedItems.length
+            ? groupItems(postedItems).map((g) => (g.length === 1 ? renderRow(g[0]) : renderGroup(g)))
+            : <div className="empty">Nothing marked posted yet. Open a post and use Mark posted.</div>}
+        </div>
+      )}
 
       <div className="filters">
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
