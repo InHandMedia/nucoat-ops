@@ -371,6 +371,7 @@ export default function Content({ me, role, contentItems, contentComments, video
     draft: contentItems.filter((i) => i.status === 'draft' && i.publish_date >= cutoff).length,
     review: contentItems.filter((i) => i.status === 'in_review').length,
     approved: contentItems.filter((i) => i.status === 'approved').length,
+    scheduled: contentItems.filter((i) => i.status === 'scheduled').length,
     posted: contentItems.filter((i) => i.status === 'posted').length
   };
 
@@ -388,6 +389,7 @@ export default function Content({ me, role, contentItems, contentComments, video
     mine: { label: 'Waiting on you', test: (i) => canApproveContent(i, me) },
     review: { label: 'Waiting on approval', test: (i) => i.status === 'in_review' },
     approved: { label: 'Approved, not yet scheduled', test: (i) => i.status === 'approved' },
+    scheduled: { label: 'Approved and scheduled', test: (i) => i.status === 'scheduled' },
     posted: { label: 'Posted', test: (i) => i.status === 'posted' }
   };
   const boxItems = box ? contentItems.filter(BOXES[box].test).sort((a, b) => (box === 'posted' ? b.publish_date.localeCompare(a.publish_date) : a.publish_date.localeCompare(b.publish_date)) || a.title.localeCompare(b.title)) : [];
@@ -505,6 +507,7 @@ export default function Content({ me, role, contentItems, contentComments, video
         <div className={`tile clickable ${box === 'mine' || (!box && mine.length) ? 'accent' : ''}`} {...tileProps('mine')}><div className="num">{mine.length}</div><div className="lbl">Waiting on you</div></div>
         <div className={`tile clickable ${box === 'review' ? 'accent' : ''}`} {...tileProps('review')}><div className="num">{counts.review}</div><div className="lbl">Waiting on approval</div></div>
         <div className={`tile clickable ${box === 'approved' ? 'accent' : ''}`} {...tileProps('approved')}><div className="num">{counts.approved}</div><div className="lbl">Approved, not yet scheduled</div></div>
+        <div className={`tile clickable ${box === 'scheduled' ? 'accent' : ''}`} {...tileProps('scheduled')}><div className="num">{counts.scheduled}</div><div className="lbl">Approved and scheduled</div></div>
         <div className={`tile clickable ${box === 'posted' ? 'accent' : ''}`} {...tileProps('posted')}><div className="num">{counts.posted}</div><div className="lbl">Posted</div></div>
       </div>
 
