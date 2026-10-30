@@ -257,8 +257,207 @@ function MetricCard({ m, entries, actions }) {
   );
 }
 
+// ---------- a number box that saves when you click away ----------
+function StatCell({ value, onSave, label }) {
+  const [v, setV] = useState(value ?? '');
+  React.useEffect(() => { setV(value ?? ''); }, [value]);
+  return (
+    <input
+      type="number" min="0" step="any" value={v} aria-label={label} placeholder="–"
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (String(v) !== String(value ?? '')) onSave(v === '' ? null : Number(v)); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      style={{ width: '78px', padding: '5px 7px', fontSize: '13px', textAlign: 'right' }}
+    />
+  );
+}
+
+const sumOf = (list, key) => list.reduce((t, c) => t + (Number(c.stats?.[key]) || 0), 0);
+const pctOf = (a, b) => (b > 0 ? `${Math.round((a / b) * 1000) / 10}%` : '–');
+const saveStat = (actions, item, key, val) => {
+  const stats = { ...(item.stats || {}) };
+  if (val === null) delete stats[key]; else stats[key] = val;
+  return actions.saveContent(item.id, { stats });
+};
+
+function Totals({ items }) {
+  return (
+    <div className="tiles" style={{ marginBottom: '14px' }}>
+      {items.map(([n, l]) => <div className="tile" key={l}><div className="num">{n}</div><div className="lbl">{l}</div></div>)}
+    </div>
+  );
+}
+
+// ---------- tab: monthly metrics ----------
+function MonthlyTab({ videos, contentItems, tasks, profiles }) {
+  const today = todayISO();
+  const months = [];
+  for (let i = 5; i >= 0; i -= 1) {
+    const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - i, 1));
+    months.push(d.toISOString().slice(0, 7));
+  }
+  const label = (k) => new Date(`${k}-01T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  const posted = contentItems.filter((c) => c.status === 'posted');
+  const cols = [['Posts and emails sent', null], ['Email', 'email'], ['Instagram', 'instagram'], ['Facebook', 'facebook'], ['LinkedIn', 'linkedin']];
+  return (
+    <>
+      <AutoPanel videos={videos} contentItems={contentItems} tasks={tasks} profiles={profiles} />
+      <div className="panel">
+        <h3>Month by month <span className="mono" style={{ fontSize: '11px' }}>marked posted</span></h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Month</th>
+                {cols.map(([l]) => <th key={l} style={{ textAlign: 'right', padding: '6px 8px' }}>{l}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {months.slice().reverse().map((k) => {
+                const inM = posted.filter((c) => c.publish_date.slice(0, 7) === k);
+                return (
+                  <tr key={k} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px' }}><b>{label(k)}</b></td>
+                    {cols.map(([l, ch]) => <td key={l} className="mono" style={{ textAlign: 'right', padding: '8px' }}>{ch ? inM.filter((c) => c.channel === ch).length : inM.length}</td>)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------- tab: post engagement ----------
+const ENGAGEMENT = [['reach', 'Reach'], ['likes', 'Likes'], ['comments', 'Comments'], ['saves', 'Saves'], ['shares', 'Shares']];
+function EngagementTab({ contentItems, actions }) {
+  const [channel, setChannel] = useState('');
+  const items = contentItems
+    .filter((c) => c.status === 'posted' && c.channel !== 'email' && (!channel || c.channel === channel))
+    .sort((a, b) => b.publish_date.localeCompare(a.publish_date));
+  const interactions = (c) => ['likes', 'comments', 'saves', 'shares'].reduce((t, k) => t + (Number(c.stats?.[k]) || 0), 0);
+  const logged = items.filter((c) => c.stats && Object.keys(c.stats).length);
+  const best = logged.slice().sort((a, b) => interactions(b) - interactions(a))[0];
+  return (
+    <>
+      <p style={{ fontSize: '12.5px', color: 'var(--ink-soft)', margin: '0 0 12px' }}>
+        Every post you have marked posted lands here. Type its numbers from Instagram, Facebook or LinkedIn insights about a week after it goes out; they save when you click away.
+      </p>
+      <Totals items={[
+        [items.length, 'Posts posted'],
+        [sumOf(items, 'reach').toLocaleString(), 'Total reach'],
+        [items.reduce((t, c) => t + interactions(c), 0).toLocaleString(), 'Likes, comments, saves, shares'],
+        [best ? best.title.replace(/^IG grid: /, '').slice(0, 28) : '–', 'Best post so far']
+      ]} />
+      <div className="filters">
+        <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+          <option value="">All channels</option>
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="linkedin">LinkedIn</option>
+        </select>
+      </div>
+      <div className="panel">
+        {items.length === 0 && <div className="empty">No posted posts yet. Mark a post as posted on the Content tab and it shows up here.</div>}
+        <div style={{ overflowX: 'auto' }}>
+          {items.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '6px 8px' }}>Post</th>
+                  {ENGAGEMENT.map(([, l]) => <th key={l} style={{ textAlign: 'right', padding: '6px 8px' }}>{l}</th>)}
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((c) => (
+                  <tr key={c.id} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px', minWidth: '220px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {c.preview_url && <img src={c.preview_url} alt="" style={{ width: '34px', height: '34px', objectFit: 'cover', borderRadius: '5px', flex: 'none' }} />}
+                        <div>
+                          <div><b>{c.title}</b></div>
+                          <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>{fmtDate(c.publish_date)} · {channelInfo(c.channel).label}</div>
+                        </div>
+                      </div>
+                    </td>
+                    {ENGAGEMENT.map(([k, l]) => (
+                      <td key={k} style={{ textAlign: 'right', padding: '8px' }}>
+                        <StatCell value={c.stats?.[k]} label={`${l} for ${c.title}`} onSave={(val) => saveStat(actions, c, k, val)} />
+                      </td>
+                    ))}
+                    <td className="mono" style={{ textAlign: 'right', padding: '8px' }} title="Interactions divided by reach">{pctOf(interactions(c), Number(c.stats?.reach) || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------- tab: emails ----------
+const EMAIL_FIELDS = [['sent', 'Sent'], ['opens', 'Opens'], ['clicks', 'Clicks'], ['unsubs', 'Unsubs']];
+function EmailsTab({ contentItems, actions }) {
+  const sent = contentItems.filter((c) => c.channel === 'email' && c.status === 'posted').sort((a, b) => b.publish_date.localeCompare(a.publish_date));
+  const upcoming = contentItems.filter((c) => c.channel === 'email' && c.status !== 'posted' && c.publish_date >= todayISO()).length;
+  const tSent = sumOf(sent, 'sent');
+  return (
+    <>
+      <p style={{ fontSize: '12.5px', color: 'var(--ink-soft)', margin: '0 0 12px' }}>
+        Every email you have marked posted (sent) lands here. Copy the numbers from the Klaviyo campaign report; open and click rates work themselves out.
+      </p>
+      <Totals items={[
+        [sent.length, 'Emails sent'],
+        [upcoming, 'Emails coming up'],
+        [pctOf(sumOf(sent, 'opens'), tSent), 'Open rate'],
+        [pctOf(sumOf(sent, 'clicks'), tSent), 'Click rate']
+      ]} />
+      <div className="panel">
+        {sent.length === 0 && <div className="empty">No emails marked sent yet. Mark an email as posted on the Content tab and it shows up here.</div>}
+        <div style={{ overflowX: 'auto' }}>
+          {sent.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '6px 8px' }}>Email</th>
+                  {EMAIL_FIELDS.map(([, l]) => <th key={l} style={{ textAlign: 'right', padding: '6px 8px' }}>{l}</th>)}
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>Open rate</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px' }}>Click rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sent.map((c) => (
+                  <tr key={c.id} style={{ borderTop: '1px solid var(--line)' }}>
+                    <td style={{ padding: '8px', minWidth: '220px' }}>
+                      <div><b>{c.title}</b></div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--ink-soft)' }}>{fmtDate(c.publish_date)}</div>
+                    </td>
+                    {EMAIL_FIELDS.map(([k, l]) => (
+                      <td key={k} style={{ textAlign: 'right', padding: '8px' }}>
+                        <StatCell value={c.stats?.[k]} label={`${l} for ${c.title}`} onSave={(val) => saveStat(actions, c, k, val)} />
+                      </td>
+                    ))}
+                    <td className="mono" style={{ textAlign: 'right', padding: '8px' }}>{pctOf(Number(c.stats?.opens) || 0, Number(c.stats?.sent) || 0)}</td>
+                    <td className="mono" style={{ textAlign: 'right', padding: '8px' }}>{pctOf(Number(c.stats?.clicks) || 0, Number(c.stats?.sent) || 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---------- page ----------
 export default function Metrics({ metrics, metricEntries, videos, contentItems, tasks, profiles, actions }) {
+  const [tab, setTab] = useState('goals');
   const [brand, setBrand] = useState('');
   const [adding, setAdding] = useState(false);
   const [n, setN] = useState({ name: '', brand: 'NuCoat', unit: '', kind: 'number', rollup: 'latest', target: '', owner_label: '' });
@@ -283,10 +482,21 @@ export default function Metrics({ metrics, metricEntries, videos, contentItems, 
       <div className="section-head">
         <div>
           <h1>Metrics</h1>
-          <p>How the marketing is doing. The top block fills itself in from the app; the goals below are numbers you log, about five minutes on Fridays.</p>
+          <p>How the marketing is doing. Pick a page below.</p>
         </div>
-        <button className="btn accent sm" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : '+ New metric'}</button>
+        {tab === 'goals' && <button className="btn accent sm" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : '+ New metric'}</button>}
       </div>
+
+      <div className="row-actions" style={{ marginBottom: '16px', flexWrap: 'wrap' }} role="tablist">
+        {[['goals', 'Goals'], ['monthly', 'Monthly metrics'], ['engagement', 'Post engagement'], ['emails', 'Emails']].map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={`btn sm ${tab === k ? 'accent' : 'ghost'}`} onClick={() => setTab(k)}>{l}</button>
+        ))}
+      </div>
+
+      {tab === 'monthly' && <MonthlyTab videos={videos} contentItems={contentItems} tasks={tasks} profiles={profiles} />}
+      {tab === 'engagement' && <EngagementTab contentItems={contentItems} actions={actions} />}
+      {tab === 'emails' && <EmailsTab contentItems={contentItems} actions={actions} />}
+      {tab === 'goals' && <>
 
       {adding && (
         <form className="panel" style={{ marginBottom: '16px' }} onSubmit={add}>
@@ -309,8 +519,6 @@ export default function Metrics({ metrics, metricEntries, videos, contentItems, 
         </form>
       )}
 
-      <AutoPanel videos={videos} contentItems={contentItems} tasks={tasks} profiles={profiles} />
-
       <div className="filters">
         <select value={brand} onChange={(e) => setBrand(e.target.value)}>
           <option value="">Both brands</option>
@@ -326,6 +534,7 @@ export default function Metrics({ metrics, metricEntries, videos, contentItems, 
           </div>
         </div>
       )) : <div className="panel"><div className="empty">No metrics yet. Use “+ New metric”, or run the metrics SQL to load the starter set from the Goals sheet.</div></div>}
+      </>}
     </>
   );
 }
