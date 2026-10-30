@@ -393,3 +393,6 @@ input[type=text].titleinput{ font-size:26px; border:none; padding:0; width:100%;
 .green-done .series-card.is-delivered{ border-color:#1F8A5F; background:#E6F6EC; }
 .green-done .series-card.is-delivered .deliv-badge{ background:#1F8A5F; }
 @media (max-width:460px){ .series-grid{ grid-template-columns:1fr; } }
+
+.content-row.picked .content-line{ background:var(--surface-2); border-radius:6px; }
+.content-line input[type=checkbox]{ width:16px; height:16px; flex:none; }

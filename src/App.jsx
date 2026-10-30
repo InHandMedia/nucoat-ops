@@ -156,6 +156,7 @@ export default function App() {
     },
     saveContent: (id, patch) => run(supabase.from('content_items').update(patch).eq('id', id)),
     deleteContent: (id) => run(supabase.from('content_items').delete().eq('id', id)),
+    deleteContentMany: (ids) => run(supabase.from('content_items').delete().in('id', ids)),
     submitContent: (ids) => run(supabase.from('content_items').update({ status: 'in_review' }).in('id', ids)),
     reviewContent: (id, decision, note) => run(supabase.rpc('review_content', { p_item: id, p_decision: decision, p_note: note || '' })),
     async approveContentMany(ids) {
