@@ -84,6 +84,17 @@ export function ContentReviewBox({ item, onReview }) {
   );
 }
 
+// Posts that share a day, brand, title and video are one piece of content cross-posted to several channels.
+function groupItems(items) {
+  const m = new Map();
+  items.forEach((i) => {
+    const k = [i.publish_date, i.brand, i.title, i.video_id || ''].join('|');
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(i);
+  });
+  return Array.from(m.values());
+}
+
 function dayLabel(iso) {
   return parseISO(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
@@ -328,6 +339,10 @@ export default function Content({ me, role, contentItems, contentComments, video
   const [open, setOpen] = useState(null);
   const [dropWeek, setDropWeek] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [weekOpen, setWeekOpen] = useState({});
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [confirmBulk, setConfirmBulk] = useState(false);
   const today = todayISO();
   const cutoff = addDays(weekStartISO(today), 0);
   const profileMap = Object.fromEntries(profiles.map((p) => [p.id, p]));
@@ -354,7 +369,104 @@ export default function Content({ me, role, contentItems, contentComments, video
   const counts = {
     draft: contentItems.filter((i) => i.status === 'draft' && i.publish_date >= cutoff).length,
     review: contentItems.filter((i) => i.status === 'in_review').length,
-    approved: contentItems.filter((i) => i.status === 'approved').length
+    approved: contentItems.filter((i) => i.status === 'approved').length,
+    posted: contentItems.filter((i) => i.status === 'posted').length
+  };
+
+  const toggleOne = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const setMany = (ids, on) => setSelected((s) => (on ? Array.from(new Set([...s, ...ids])) : s.filter((x) => !ids.includes(x))));
+  const exitSelect = () => { setSelecting(false); setSelected([]); setConfirmBulk(false); };
+  async function deleteSelected() {
+    const ids = selected.filter((id) => filtered.some((i) => i.id === id));
+    if (!ids.length) return;
+    await actions.deleteContentMany(ids);
+    exitSelect();
+  }
+  const selectedShown = selected.filter((id) => filtered.some((i) => i.id === id));
+  // This week and next are open; later weeks start collapsed. Filters and selecting open everything.
+  const nearCutoff = addDays(weekStartISO(today), 7);
+  const weekIsOpen = (ws) => selecting || status || weekOpen[ws] !== undefined ? (selecting || status ? true : weekOpen[ws]) : ws <= nearCutoff;
+  const allOpen = weeks.every((w) => weekIsOpen(w.ws));
+  const setAllWeeks = (on) => setWeekOpen(Object.fromEntries(weeks.map((w) => [w.ws, on])));
+
+  const renderRow = (i) => {
+    const v = videoMap[i.video_id];
+    const expanded = open === i.id;
+    const needsMe = canApproveContent(i, me);
+    return (
+      <div
+        key={i.id} className={`content-row ${expanded ? 'open' : ''} ${selecting && selected.includes(i.id) ? 'picked' : ''}`} data-done={isContentDone(i.status) ? 'true' : 'false'}
+        draggable={canMoveContent(i, staff) && !expanded && !selecting}
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', i.id); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragEnd={() => setDropWeek(null)}
+        title={canMoveContent(i, staff) && !expanded && !selecting ? 'Drag to another week to move it' : undefined}
+      >
+        <div className="content-line" onClick={() => (selecting ? toggleOne(i.id) : setOpen(expanded ? null : i.id))}>
+          {selecting && (
+            <input
+              type="checkbox" checked={selected.includes(i.id)} aria-label={`Select ${i.title}`}
+              onChange={() => toggleOne(i.id)} onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <span className="mono cdate">{dayLabel(i.publish_date)}</span>
+          <ChannelChip channel={i.channel} />
+          <BrandChip brand={i.brand} />
+          <span className="ctitle">{i.title}</span>
+          {v && <NumChip number={v.number} />}
+          {needsMe && <span className="chip wait">Your approval</span>}
+          <ContentStatusChip status={i.status} />
+          <span className="chev">{expanded ? '▾' : '▸'}</span>
+        </div>
+        {expanded && (
+          <ItemDetail
+            item={i} me={me} role={role} videos={videos} profileMap={profileMap}
+            comments={contentComments} actions={actions}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const renderGroup = (g) => {
+    const first = g[0];
+    const key = `g-${first.id}`;
+    const expanded = open === key;
+    const allSel = g.every((x) => selected.includes(x.id));
+    const v = videoMap[first.video_id];
+    const sts = Array.from(new Set(g.map((x) => x.status)));
+    const movable = staff && !expanded && !selecting && g.every((x) => canMoveContent(x, staff));
+    return (
+      <div
+        key={key} className={`content-row ${expanded ? 'open' : ''} ${selecting && allSel ? 'picked' : ''}`}
+        data-done={g.every((x) => isContentDone(x.status)) ? 'true' : 'false'}
+        draggable={movable}
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', g.map((x) => x.id).join(',')); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragEnd={() => setDropWeek(null)}
+        title={movable ? 'Drag to another week to move all of these' : undefined}
+      >
+        <div className="content-line" onClick={() => (selecting ? setMany(g.map((x) => x.id), !allSel) : setOpen(expanded ? null : key))}>
+          {selecting && (
+            <input
+              type="checkbox" checked={allSel} aria-label={`Select ${first.title}`}
+              onChange={() => setMany(g.map((x) => x.id), !allSel)} onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <span className="mono cdate">{dayLabel(first.publish_date)}</span>
+          <span style={{ display: 'inline-flex', gap: '4px', flexWrap: 'wrap' }}>{g.map((x) => <ChannelChip key={x.id} channel={x.channel} />)}</span>
+          <BrandChip brand={first.brand} />
+          <span className="ctitle">{first.title}</span>
+          {v && <NumChip number={v.number} />}
+          {sts.length === 1 ? <ContentStatusChip status={sts[0]} /> : <span className="chip">Mixed</span>}
+          <span className="chev">{expanded ? '▾' : '▸'}</span>
+        </div>
+        {expanded && g.map((x) => (
+          <div key={x.id} style={{ borderTop: '1px solid var(--line)', paddingTop: '8px', marginTop: '8px' }}>
+            <div className="meta-line" style={{ gap: '8px', alignItems: 'center' }}><ChannelChip channel={x.channel} /><ContentStatusChip status={x.status} /></div>
+            <ItemDetail item={x} me={me} role={role} videos={videos} profileMap={profileMap} comments={contentComments} actions={actions} />
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -374,6 +486,12 @@ export default function Content({ me, role, contentItems, contentComments, video
         <div className={`tile ${mine.length ? 'accent' : ''}`}><div className="num">{mine.length}</div><div className="lbl">Waiting on you</div></div>
         <div className="tile"><div className="num">{counts.review}</div><div className="lbl">Waiting on approval</div></div>
         <div className="tile"><div className="num">{counts.approved}</div><div className="lbl">Approved, not yet scheduled</div></div>
+        <div
+          className={`tile clickable ${status === 'posted' ? 'accent' : ''}`} role="button" tabIndex={0}
+          onClick={() => setStatus(status === 'posted' ? '' : 'posted')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatus(status === 'posted' ? '' : 'posted'); } }}
+          title={status === 'posted' ? 'Show everything again' : 'Show only posted'}
+        ><div className="num">{counts.posted}</div><div className="lbl">{status === 'posted' ? 'Posted (showing)' : 'Posted'}</div></div>
       </div>
 
       <div className="filters">
@@ -391,7 +509,29 @@ export default function Content({ me, role, contentItems, contentComments, video
           {CHANNELS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
         <label className="check"><input type="checkbox" checked={earlier} onChange={(e) => setEarlier(e.target.checked)} /> Include earlier weeks</label>
+        {weeks.length > 1 && !selecting && !status && <button className="btn ghost sm" onClick={() => setAllWeeks(!allOpen)}>{allOpen ? 'Collapse all weeks' : 'Expand all weeks'}</button>}
+        {staff && !selecting && <button className="btn ghost sm" onClick={() => setSelecting(true)}>Select posts</button>}
       </div>
+
+      {staff && selecting && (
+        <div className="panel" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', position: 'sticky', top: '8px', zIndex: 5 }}>
+          <b>{selectedShown.length} selected</b>
+          <button className="linkbtn" onClick={() => setMany(filtered.map((i) => i.id), true)}>Select all {filtered.length} shown</button>
+          <button className="linkbtn" onClick={() => setSelected([])}>Clear</button>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {!confirmBulk ? (
+              <button className="btn sm accent" disabled={!selectedShown.length} onClick={() => setConfirmBulk(true)}>Delete {selectedShown.length || ''}</button>
+            ) : (
+              <>
+                <span style={{ fontSize: '12.5px' }}>Permanently delete {selectedShown.length} post{selectedShown.length === 1 ? '' : 's'}? This cannot be undone.</span>
+                <button className="btn sm accent" onClick={deleteSelected}>Yes, delete</button>
+                <button className="btn sm ghost" onClick={() => setConfirmBulk(false)}>Keep</button>
+              </>
+            )}
+            <button className="btn sm ghost" onClick={exitSelect}>Done</button>
+          </span>
+        </div>
+      )}
 
       {weeks.length ? weeks.map((w) => {
         const drafts = w.items.filter((i) => i.status === 'draft');
@@ -402,16 +542,32 @@ export default function Content({ me, role, contentItems, contentComments, video
             onDragLeave={staff ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropWeek(null); } : undefined}
             onDrop={staff ? (e) => {
               e.preventDefault(); setDropWeek(null);
-              const item = contentItems.find((c) => c.id === e.dataTransfer.getData('text/plain'));
-              if (!item || !canMoveContent(item, staff)) return;
-              // keep the same weekday, shift to this week
-              const offset = Math.round((parseISO(item.publish_date) - parseISO(weekStartISO(item.publish_date))) / 86400000);
-              moveContent(item, addDays(w.ws, offset), actions);
+              const ids = e.dataTransfer.getData('text/plain').split(',');
+              (async () => {
+                for (const id of ids) {
+                  const item = contentItems.find((c) => c.id === id);
+                  if (!item || !canMoveContent(item, staff)) continue;
+                  // keep the same weekday, shift to this week
+                  const offset = Math.round((parseISO(item.publish_date) - parseISO(weekStartISO(item.publish_date))) / 86400000);
+                  await moveContent(item, addDays(w.ws, offset), actions);
+                }
+              })();
             } : undefined}
           >
             <h3>
-              <span>Week of {weekLabel(w.ws)} <span className="mono" style={{ fontSize: '11px' }}>{w.items.length}</span></span>
-              {staff && drafts.length > 0 && (
+              <span
+                role="button" tabIndex={0} style={{ cursor: 'pointer' }} title={weekIsOpen(w.ws) ? 'Collapse this week' : 'Expand this week'}
+                onClick={() => setWeekOpen((o) => ({ ...o, [w.ws]: !weekIsOpen(w.ws) }))}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setWeekOpen((o) => ({ ...o, [w.ws]: !weekIsOpen(w.ws) })); } }}
+              >
+                {weekIsOpen(w.ws) ? '▾' : '▸'} Week of {weekLabel(w.ws)} <span className="mono" style={{ fontSize: '11px' }}>{w.items.length}</span>
+              </span>
+              {staff && selecting && (
+                <button className="linkbtn" onClick={() => setMany(w.items.map((i) => i.id), !w.items.every((i) => selected.includes(i.id)))}>
+                  {w.items.every((i) => selected.includes(i.id)) ? 'Unselect week' : 'Select week'}
+                </button>
+              )}
+              {staff && !selecting && drafts.length > 0 && (
                 <span style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
                   <button className="linkbtn" onClick={() => actions.submitContent(drafts.map((d) => d.id))}>Submit {drafts.length} draft{drafts.length > 1 ? 's' : ''} for approval</button>
                   {me.role === 'owner' && (
@@ -423,37 +579,7 @@ export default function Content({ me, role, contentItems, contentComments, video
                 </span>
               )}
             </h3>
-            {w.items.map((i) => {
-              const v = videoMap[i.video_id];
-              const expanded = open === i.id;
-              const needsMe = canApproveContent(i, me);
-              return (
-                <div
-                  key={i.id} className={`content-row ${expanded ? 'open' : ''}`} data-done={isContentDone(i.status) ? 'true' : 'false'}
-                  draggable={canMoveContent(i, staff) && !expanded}
-                  onDragStart={(e) => { e.dataTransfer.setData('text/plain', i.id); e.dataTransfer.effectAllowed = 'move'; }}
-                  onDragEnd={() => setDropWeek(null)}
-                  title={canMoveContent(i, staff) && !expanded ? 'Drag to another week to move it' : undefined}
-                >
-                  <div className="content-line" onClick={() => setOpen(expanded ? null : i.id)}>
-                    <span className="mono cdate">{dayLabel(i.publish_date)}</span>
-                    <ChannelChip channel={i.channel} />
-                    <BrandChip brand={i.brand} />
-                    <span className="ctitle">{i.title}</span>
-                    {v && <NumChip number={v.number} />}
-                    {needsMe && <span className="chip wait">Your approval</span>}
-                    <ContentStatusChip status={i.status} />
-                    <span className="chev">{expanded ? '▾' : '▸'}</span>
-                  </div>
-                  {expanded && (
-                    <ItemDetail
-                      item={i} me={me} role={role} videos={videos} profileMap={profileMap}
-                      comments={contentComments} actions={actions}
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {weekIsOpen(w.ws) && groupItems(w.items).map((g) => (g.length === 1 ? renderRow(g[0]) : renderGroup(g)))}
           </div>
         );
       }) : (
