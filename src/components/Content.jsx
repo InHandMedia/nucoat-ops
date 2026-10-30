@@ -4,6 +4,60 @@ import {
   parseISO, fmtDate, channelInfo, contentStatusInfo, isContentDone
 } from '../constants.js';
 import { BrandChip, NumChip } from './Badges.jsx';
+import { supabase, isDemo } from '../supabaseClient.js';
+
+// Preview image for a post: shows it, and lets staff upload, replace or remove it.
+function PreviewPicture({ item, staff, actions }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [big, setBig] = useState(false);
+  async function onPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setErr('Please pick an image (JPEG or PNG).'); return; }
+    if (file.size > 10 * 1024 * 1024) { setErr('That image is over 10 MB. Please use a smaller one.'); return; }
+    setErr(''); setBusy(true);
+    try {
+      let url;
+      if (isDemo) {
+        url = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+      } else {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const path = `${item.id}/${Date.now()}.${ext || 'jpg'}`;
+        const up = await supabase.storage.from('post-previews').upload(path, file, { contentType: file.type, upsert: false });
+        if (up.error) throw up.error;
+        url = supabase.storage.from('post-previews').getPublicUrl(path).data.publicUrl;
+      }
+      await actions.saveContent(item.id, { preview_url: url });
+    } catch (ex) {
+      setErr(ex?.message || 'Upload failed. Has the preview migration been run in Supabase?');
+    }
+    setBusy(false);
+  }
+  if (!item.preview_url && !staff) return null;
+  return (
+    <div className="field">
+      <label>Preview (what the post looks like)</label>
+      {item.preview_url ? (
+        <div>
+          <img
+            src={item.preview_url} alt={`Preview of ${item.title}`} onClick={() => setBig(!big)}
+            style={{ display: 'block', maxWidth: big ? '100%' : '260px', width: '100%', borderRadius: '10px', border: '1px solid var(--line)', cursor: 'zoom-in' }}
+          />
+          <div className="row-actions" style={{ marginTop: '6px' }}>
+            <button type="button" className="linkbtn" onClick={() => setBig(!big)}>{big ? 'Make smaller' : 'View bigger'}</button>
+            {staff && <label className="linkbtn" style={{ cursor: 'pointer' }}>{busy ? 'Uploading...' : 'Replace'}<input type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} disabled={busy} /></label>}
+            {staff && <button type="button" className="linkbtn" onClick={() => actions.saveContent(item.id, { preview_url: '' })}>Remove</button>}
+          </div>
+        </div>
+      ) : (
+        <label className="btn sm ghost" style={{ cursor: 'pointer', width: 'fit-content' }}>{busy ? 'Uploading...' : 'Upload a preview image'}<input type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} disabled={busy} /></label>
+      )}
+      {err && <div style={{ color: 'var(--warn)', fontSize: '12.5px', marginTop: '6px' }}>{err}</div>}
+    </div>
+  );
+}
 
 export function ChannelChip({ channel }) {
   const c = channelInfo(channel);
@@ -216,6 +270,7 @@ function ItemDetail({ item, me, role, videos, profileMap, comments, actions }) {
         <label>Copy / caption (this is what gets approved)</label>
         <textarea rows="5" value={form.caption} disabled={!staff} onChange={(e) => set('caption', e.target.value)} placeholder="Write the caption or email copy here" style={{ width: '100%' }} />
       </div>
+      <PreviewPicture item={item} staff={staff} actions={actions} />
       <div className="two-col">
         <div className="field">
           <label>Asset link (Drive, Klaviyo, SocialPilot...)</label>
@@ -432,6 +487,7 @@ export default function Content({ me, role, contentItems, contentComments, video
           <span className="mono cdate">{dayLabel(i.publish_date)}</span>
           <ChannelChip channel={i.channel} />
           <BrandChip brand={i.brand} />
+          {i.preview_url && <img src={i.preview_url} alt="" style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '5px', flex: 'none', border: '1px solid var(--line)' }} />}
           <span className="ctitle">{i.title}</span>
           {v && <NumChip number={v.number} />}
           {needsMe && <span className="chip wait">Your approval</span>}
