@@ -1,10 +1,11 @@
 import { todayISO, addDays, weekStartISO } from '../constants.js';
 
 export const DEMO_USERS = [
-  { id: 'u-ali', email: 'alistair@demo.test', display_name: 'Ali', role: 'owner' },
-  { id: 'u-jodi', email: 'jodi@demo.test', display_name: 'Jodi', role: 'editor' },
+  { id: 'u-ali', email: 'alistair@demo.test', display_name: 'Ali', role: 'owner', title: 'Head of Marketing' },
+  { id: 'u-jodi', email: 'jodi@demo.test', display_name: 'Jodi', role: 'editor', title: 'Founder' },
   { id: 'u-marcel', email: 'marcel@demo.test', display_name: 'Marcel', role: 'editor' },
-  { id: 'u-brady', email: 'brady@demo.test', display_name: 'Brady', role: 'editor' }
+  { id: 'u-brady', email: 'brady@demo.test', display_name: 'Brady', role: 'editor' },
+  { id: 'u-taylor', email: 'taylor@demo.test', display_name: 'Taylor', role: 'editor', title: 'Sales Lead', can_approve: false, department: 'Sales', hidden_tabs: ['series', 'content', 'metrics', 'requests'] }
 ];
 
 export const CHECKLIST_TEMPLATE = [
@@ -45,7 +46,28 @@ export function buildSeed() {
   let n = 0;
   const id = (p) => `${p}-${++n}`;
 
-  const profiles = DEMO_USERS.map((u) => ({ id: u.id, display_name: u.display_name, role: u.role, created_at: d(-60) }));
+  const ago = (mins) => new Date(Date.now() - mins * 60000).toISOString();
+  const at = (days, hour) => { const x = new Date(); x.setDate(x.getDate() + days); x.setHours(hour, 0, 0, 0); return x.toISOString(); };
+  const seen = { 'u-ali': 1, 'u-jodi': 190, 'u-marcel': 34, 'u-brady': 4, 'u-taylor': 60 * 26 };
+  const profiles = DEMO_USERS.map((u) => ({
+    id: u.id, display_name: u.display_name, role: u.role, email: u.email, created_at: d(-60),
+    title: u.title || '', can_approve: u.can_approve !== false, department: u.department || 'Marketing', hidden_tabs: u.hidden_tabs || (u.role === 'owner' ? [] : ['series']), last_seen_at: ago(seen[u.id] ?? 500)
+  }));
+  const projects = [
+    { id: 'p-tiktok', name: 'TikTok Shop launch', description: 'Get the TikTok Shop set up and selling.', department: 'Marketing', status: 'planning', member_ids: ['u-ali', 'u-taylor'], outside_members: 'Halle', due_date: d(30), link: '', show_in_menu: true, created_by: 'u-ali', created_at: d(-3) }
+  ];
+  const project_updates = [
+    { id: 'pu-1', project_id: 'p-tiktok', author: 'u-ali', body: 'Kicking this off. First step is the seller account and picking the launch products.', created_at: d(-2) }
+  ];
+  const meetings = [
+    { id: 'm-1', title: 'TikTok Shop kickoff', starts_at: at(1, 11), duration_min: 30, attendee_ids: ['u-ali', 'u-taylor'], extra_emails: '', join_link: '', notes: 'Seller account, launch products, who owns what.', project_id: 'p-tiktok', created_by: 'u-ali', created_at: d(-1) },
+    { id: 'm-2', title: 'Weekly marketing check-in', starts_at: at(0, 15), duration_min: 30, attendee_ids: ['u-ali', 'u-brady', 'u-marcel'], extra_emails: '', join_link: 'https://teams.microsoft.com/l/meetup-join/example', notes: '', project_id: null, created_by: 'u-ali', created_at: d(-6) }
+  ];
+  const projectTasks = [
+    { id: 'pt-1', title: 'Open the TikTok seller account', assigned_to: ['u-taylor'], due_date: d(3) },
+    { id: 'pt-2', title: 'Pick the 5 launch products', assigned_to: ['u-ali', 'u-taylor'], due_date: d(6) },
+    { id: 'pt-3', title: 'Shoot product clips for the shop', assigned_to: ['u-ali'], due_date: d(12) }
+  ].map((t) => ({ ...t, project_id: 'p-tiktok', category: 'TikTok Shop launch', owner_label: '', notes: '', source: '', video_id: null, done: false, created_by: 'u-ali', created_at: d(-2) }));
 
   const videos = [];
   const checklist = [];
@@ -199,7 +221,7 @@ export function buildSeed() {
 
   return {
     profiles, videos, video_internal: internal, checklist_items: checklist, video_comments: comments,
-    tasks, content_items, content_comments, metrics, metric_entries, requests, request_estimates, time_entries: te,
+    tasks: [...tasks, ...projectTasks], content_items, content_comments, metrics, metric_entries, requests, request_estimates, time_entries: te, notes: [], projects, project_updates, meetings, custom_tabs: [],
     billing_settings: [{ id: 1, weekly_cap_hours: 10, weekly_fee: 300, overage_rate: null }]
   };
 }

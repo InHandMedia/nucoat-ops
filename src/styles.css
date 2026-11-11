@@ -396,3 +396,44 @@ input[type=text].titleinput{ font-size:26px; border:none; padding:0; width:100%;
 
 .content-row.picked .content-line{ background:var(--surface-2); border-radius:6px; }
 .content-line input[type=checkbox]{ width:16px; height:16px; flex:none; }
+
+/* ---------- workspace: team view, tab switches, projects, meetings, mini window ---------- */
+nav.tabs button.tab-project::before, nav.tabs button.tab-custom::before{ content:''; display:inline-block; width:7px; height:7px; border-radius:99px; margin-right:6px; vertical-align:middle; background:var(--magenta); }
+nav.tabs button.tab-custom::before{ background:var(--cyan); }
+.team-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+.team-card{ border:1px solid var(--line); border-radius:12px; padding:14px; cursor:pointer; background:var(--surface); transition:border-color .15s, box-shadow .15s; }
+.team-card:hover, .team-card:focus-visible{ border-color:var(--accent); box-shadow:var(--shadow); outline:none; }
+.team-card-head{ display:flex; align-items:center; gap:8px; font-size:15px; }
+.team-card-head .chip{ margin-left:auto; }
+.presence{ width:9px; height:9px; border-radius:99px; background:#C5CBD6; flex:none; }
+.presence.on{ background:#1F8A5F; box-shadow:0 0 0 3px #E2F5EC; }
+.team-seen{ font-size:11.5px; color:var(--ink-soft); margin:3px 0 10px 17px; }
+.team-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.team-stats div{ background:var(--surface-2); border-radius:8px; padding:7px 4px; text-align:center; }
+.team-stats b{ display:block; font-family:'Big Shoulders Display',sans-serif; font-size:20px; line-height:1; }
+.team-stats span{ font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); font-weight:700; }
+.team-stats .bad{ background:#FBE5E0; } .team-stats .bad b{ color:#A8321C; }
+.team-stats .warn{ background:#FFF3D6; } .team-stats .warn b{ color:#8A5A00; }
+.team-next{ margin-top:10px; font-size:12.5px; display:flex; flex-direction:column; gap:4px; }
+.team-next span{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:700; margin-right:4px; }
+.matrix-wrap{ overflow-x:auto; }
+.matrix{ border-collapse:collapse; width:100%; font-size:13px; }
+.matrix th, .matrix td{ padding:8px 10px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+.matrix th:first-child, .matrix td:first-child{ text-align:left; }
+.matrix th{ font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); }
+.matrix select{ padding:4px 6px; font-size:12px; }
+.project-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+.embed-frame{ width:100%; height:calc(100vh - 220px); min-height:480px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+button.cal-filter{ font-size:12px !important; background:none; border:1px solid transparent; border-radius:99px; padding:3px 8px; cursor:pointer; font:inherit; color:inherit; }
+button.cal-filter:hover{ border-color:var(--line); }
+button.cal-filter.off{ opacity:.4; text-decoration:line-through; }
+.mini{ max-width:380px; margin:0 auto; padding:14px; font-size:13px; }
+.mini-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.mini-head img{ height:24px; } .mini-head a{ font-size:12px; font-weight:700; text-decoration:none; }
+.mini-count{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; margin-bottom:10px; }
+.mini-count b{ font-family:'Big Shoulders Display',sans-serif; font-size:34px; line-height:1; }
+.mini-block{ border-top:1px solid var(--line); padding:8px 0; }
+.mini-label{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
+.mini-row{ display:flex; align-items:center; gap:8px; padding:5px 0; }
+.mini-row span:nth-of-type(1){ flex:1; } .mini-row .mono{ flex:none !important; font-size:11px; }
+@media (max-width:460px){ .team-stats{ grid-template-columns:repeat(2,1fr); } }

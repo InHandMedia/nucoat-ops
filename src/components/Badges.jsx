@@ -40,6 +40,6 @@ export function People({ ids, profileMap }) {
   });
 }
 
-export function RolePill({ role }) {
-  return <span className="role-pill">{roleLabel(role)}</span>;
+export function RolePill({ role, title }) {
+  return <span className="role-pill" title={title ? roleLabel(role) : undefined}>{title || roleLabel(role)}</span>;
 }

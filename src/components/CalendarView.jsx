@@ -1,16 +1,30 @@
 import React, { useState } from 'react';
 import { moveContent, canMoveContent } from './Content.jsx';
+import { MeetingModal } from './Meetings.jsx';
+import { meetingDayISO, meetingTime } from '../workspace.js';
 import { isStaff, todayISO, fmtDateLong, pad, OPEN_REQUEST_STATUSES, channelInfo, isContentDone } from '../constants.js';
 
 const EVENT_TYPES = {
   shoot: { label: 'Shoot', bg: '#DDF2F4', fg: '#0A5C64', dot: '#0E7C86' },
   due: { label: 'Due', bg: '#FBEEDD', fg: '#8A4C08', dot: '#C9711B' },
   request: { label: 'Request needed by', bg: '#EFE7FB', fg: '#5A3399', dot: '#7B4FC9' },
-  post: { label: 'Post / email', bg: '#E3ECFB', fg: '#1F4FA8', dot: '#2F6FDB' }
+  post: { label: 'Post / email', bg: '#E3ECFB', fg: '#1F4FA8', dot: '#2F6FDB' },
+  meeting: { label: 'Meeting', bg: '#E6F6EC', fg: '#14663F', dot: '#1F8A5F' },
+  task: { label: 'My task due', bg: '#F2F4F8', fg: '#3A4150', dot: '#5B6472' }
 };
 
-export default function CalendarView({ me, role, videos, requests, contentItems = [], actions, openVideo, goTab }) {
+export default function CalendarView({ me, role, videos, requests, contentItems = [], meetings = [], tasks = [], profiles = [], projects = [], shows = {}, upgraded, actions, openVideo, goTab }) {
   const staff = isStaff(role);
+  const [off, setOff] = useState([]); // event types switched off in the legend
+  const [meeting, setMeeting] = useState(null); // null | { day } (new) | meeting row
+  const types = Object.keys(EVENT_TYPES).filter((k) => {
+    if (k === 'shoot' || k === 'due') return shows.series;
+    if (k === 'post') return shows.content;
+    if (k === 'request') return shows.requests;
+    if (k === 'meeting') return upgraded;
+    return staff;
+  });
+  const on = (k) => types.includes(k) && !off.includes(k);
   const [dropIso, setDropIso] = useState(null);
   const green = !!me?.show_done_green;
   const [month, setMonth] = useState(() => {
@@ -34,7 +48,7 @@ export default function CalendarView({ me, role, videos, requests, contentItems 
 
   // Build every event once, keyed by date.
   const events = {};
-  const push = (iso, ev) => { if (iso) (events[iso] = events[iso] || []).push(ev); };
+  const push = (iso, ev) => { if (iso && on(ev.type)) (events[iso] = events[iso] || []).push(ev); };
   videos.forEach((v) => {
     const label = `#${String(v.number).padStart(2, '0')} ${v.title}`;
     const vdone = v.stage === 'delivered';
@@ -49,12 +63,22 @@ export default function CalendarView({ me, role, videos, requests, contentItems 
     push(r.due_date, { type: 'request', label: r.title, requestId: r.id, key: `r-${r.id}`, done: r.status === 'done' });
   });
 
+  meetings.forEach((m) => {
+    push(meetingDayISO(m), { type: 'meeting', label: `${meetingTime(m)} ${m.title}`, meeting: m, key: `m-${m.id}`, done: false, sort: m.starts_at });
+  });
+  tasks.filter((t) => t.due_date && (t.assigned_to || []).includes(me.id) && (green || !t.done)).forEach((t) => {
+    push(t.due_date, { type: 'task', label: t.title, taskId: t.id, key: `t-${t.id}`, done: t.done });
+  });
+  // Meetings first, in time order, so the day reads top to bottom.
+  Object.values(events).forEach((list) => list.sort((a, b) => (b.type === 'meeting') - (a.type === 'meeting') || (a.sort || '').localeCompare(b.sort || '')));
+
   const todayIso = todayISO();
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   function openEvent(ev) {
     setDayModal(null);
-    if (ev.videoId) openVideo(ev.videoId); else if (ev.contentId) goTab('content'); else goTab('requests');
+    if (ev.meeting) { if (staff) setMeeting(ev.meeting); else if (ev.meeting.join_link) window.open(ev.meeting.join_link, '_blank', 'noopener'); }
+    else if (ev.videoId) openVideo(ev.videoId); else if (ev.contentId) goTab('content'); else if (ev.taskId) goTab('tasks'); else goTab('requests');
   }
 
   return (
@@ -62,14 +86,18 @@ export default function CalendarView({ me, role, videos, requests, contentItems 
       <div className="section-head">
         <div>
           <h1>Calendar</h1>
-          <p>Shoots, due dates, posts and emails, and request deadlines. Click a day for details.{staff ? ' Drag a post or email onto another day to move it.' : ''}</p>
+          <p>Meetings, posts and emails, deadlines and your task due dates. Click a day for details{staff && upgraded ? ' or to add a meeting' : ''}.{staff && shows.content ? ' Drag a post or email onto another day to move it.' : ''}</p>
         </div>
+        {staff && upgraded && <button className="btn accent" onClick={() => setMeeting({ day: todayISO() })}>+ Meeting</button>}
       </div>
       <div className="cal-legend">
-        {Object.values(EVENT_TYPES).map((t) => (
-          <span className="cal-legend-item" key={t.label}><span className="cal-legend-dot" style={{ background: t.dot }} />{t.label}</span>
+        {types.map((k) => (
+          <button
+            type="button" className={`cal-legend-item cal-filter ${off.includes(k) ? 'off' : ''}`} key={k} aria-pressed={!off.includes(k)}
+            title="Click to show or hide" onClick={() => setOff(off.includes(k) ? off.filter((x) => x !== k) : [...off, k])}
+          ><span className="cal-legend-dot" style={{ background: EVENT_TYPES[k].dot }} />{EVENT_TYPES[k].label}</button>
         ))}
-        <span className="cal-legend-item"><span className="cal-legend-dot" style={{ background: 'linear-gradient(90deg,#E0457B,#3E8EDE)' }} />NuFun (tinted)</span>
+        {(shows.series || shows.content) && <span className="cal-legend-item"><span className="cal-legend-dot" style={{ background: 'linear-gradient(90deg,#E0457B,#3E8EDE)' }} />NuFun (tinted)</span>}
         {green && <span className="cal-legend-item"><span className="cal-legend-dot" style={{ background: '#1F8A5F' }} />Done: approved, scheduled, posted</span>}
       </div>
       <div className="cal">
@@ -135,11 +163,13 @@ export default function CalendarView({ me, role, videos, requests, contentItems 
               </div>
             )) : <div className="empty">Nothing on this day.</div>}
             <div className="modal-actions">
+              {staff && upgraded ? <button className="btn accent" onClick={() => { setMeeting({ day: dayModal }); setDayModal(null); }}>+ Meeting this day</button> : <span />}
               <button className="btn ghost" onClick={() => setDayModal(null)}>Close</button>
             </div>
           </div>
         </div>
       )}
+      {meeting && <MeetingModal initial={meeting} me={me} profiles={profiles} projects={projects} actions={actions} onClose={() => setMeeting(null)} />}
     </>
   );
 }

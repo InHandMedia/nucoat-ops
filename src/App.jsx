@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isDemo } from './supabaseClient.js';
 import { isOwner, isStaff, roleLabel } from './constants.js';
+import { tabsFor, tabOn } from './workspace.js';
 import Login from './components/Login.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import MyTasks from './components/MyTasks.jsx';
@@ -12,21 +13,31 @@ import CalendarView from './components/CalendarView.jsx';
 import Requests from './components/Requests.jsx';
 import Hours from './components/Hours.jsx';
 import Team from './components/Team.jsx';
+import Projects, { ProjectDetail } from './components/Projects.jsx';
+import Mini from './components/Mini.jsx';
 import { RolePill } from './components/Badges.jsx';
 
 const EMPTY = {
   profiles: [], videos: [], internal: [], checklist: [], comments: [],
-  tasks: [], contentItems: [], contentComments: [], metrics: [], metricEntries: [], requests: [], estimates: [], timeEntries: [], notes: [], settings: null
+  tasks: [], contentItems: [], contentComments: [], metrics: [], metricEntries: [], requests: [], estimates: [], timeEntries: [], notes: [], settings: null,
+  projects: [], projectUpdates: [], meetings: [], customTabs: [], upgraded: true
 };
 
-function tabsFor(role) {
-  const tabs = [['dashboard', 'Dashboard']];
-  if (isStaff(role)) tabs.push(['tasks', 'Tasks']);
-  tabs.push(['series', 'Series'], ['content', 'Content'], ['calendar', 'Calendar']);
-  if (isStaff(role)) tabs.push(['metrics', 'Metrics']);
-  tabs.push(['requests', 'Requests']);
-  if (isOwner(role)) tabs.push(['hours', 'Hours'], ['team', 'Team']);
-  return tabs;
+const isMini = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('mini');
+
+// An extra tab the owner added: a web page shown inside the app, or a link out.
+function CustomTabView({ tab }) {
+  return (
+    <>
+      <div className="section-head">
+        <div><h1>{tab.label}</h1></div>
+        <a className="btn ghost" href={tab.url} target="_blank" rel="noopener noreferrer">Open in a new window</a>
+      </div>
+      {tab.mode === 'embed'
+        ? <iframe className="embed-frame" src={tab.url} title={tab.label} />
+        : <div className="panel"><div className="empty">This page opens in its own window. Use the button above.</div></div>}
+    </>
+  );
 }
 
 export default function App() {
@@ -55,7 +66,7 @@ export default function App() {
     const staff = isStaff(role);
     const owner = isOwner(role);
     const empty = Promise.resolve({ data: [] });
-    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs, mt, me, nt] = await Promise.all([
+    const [v, vi, ci, vc, t, ct, cc, r, re, te, bs, mt, me, nt, pj, pu, mg, cu] = await Promise.all([
       supabase.from('videos').select('*').order('number', { ascending: true }),
       staff ? supabase.from('video_internal').select('*') : empty,
       staff ? supabase.from('checklist_items').select('*').order('position', { ascending: true }) : empty,
@@ -69,7 +80,11 @@ export default function App() {
       owner ? supabase.from('billing_settings').select('*').eq('id', 1).maybeSingle() : Promise.resolve({ data: null }),
       staff ? supabase.from('metrics').select('*').order('position', { ascending: true }) : empty,
       staff ? supabase.from('metric_entries').select('*').order('entry_date', { ascending: true }) : empty,
-      supabase.from('notes').select('*').order('created_at', { ascending: false })
+      supabase.from('notes').select('*').order('created_at', { ascending: false }),
+      supabase.from('projects').select('*').order('created_at', { ascending: true }),
+      supabase.from('project_updates').select('*').order('created_at', { ascending: false }),
+      supabase.from('meetings').select('*').order('starts_at', { ascending: true }),
+      supabase.from('custom_tabs').select('*').order('position', { ascending: true })
     ]);
     setData({
       profiles: profiles || [],
@@ -86,19 +101,37 @@ export default function App() {
       estimates: re.data || [],
       timeEntries: te.data || [],
       notes: nt.data || [],
-      settings: bs.data || null
+      settings: bs.data || null,
+      projects: pj.data || [],
+      projectUpdates: pu.data || [],
+      meetings: mg.data || [],
+      customTabs: cu.data || [],
+      // false until supabase/migration_07_workspace.sql has been run
+      upgraded: !pj.error && !mg.error
     });
   }, [userId]);
 
   useEffect(() => {
     if (!userId) { setData(EMPTY); return undefined; }
     loadAll();
-    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'metrics', 'metric_entries', 'requests', 'request_estimates', 'time_entries', 'billing_settings', 'notes'];
+    const tables = ['profiles', 'videos', 'video_internal', 'checklist_items', 'video_comments', 'tasks', 'content_items', 'content_comments', 'metrics', 'metric_entries', 'requests', 'request_estimates', 'time_entries', 'billing_settings', 'notes', 'projects', 'project_updates', 'meetings', 'custom_tabs'];
     let ch = supabase.channel('nucoat-live');
     tables.forEach((table) => { ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, loadAll); });
     ch.subscribe();
     return () => supabase.removeChannel(ch);
   }, [userId, loadAll]);
+
+  // Presence for the live team view: note when this person was last here.
+  const upgraded = data.upgraded && data.profiles.length > 0;
+  useEffect(() => {
+    if (!userId || !upgraded) return undefined;
+    const ping = () => {
+      if (document.visibilityState === 'visible') supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId).then(() => {});
+    };
+    ping();
+    const timer = setInterval(ping, 5 * 60000);
+    return () => clearInterval(timer);
+  }, [userId, upgraded]);
 
   function say(msg) {
     setToast(msg);
@@ -118,8 +151,10 @@ export default function App() {
   const me = data.profiles.find((p) => p.id === userId);
   const role = me?.role;
   if (!me) return null; // profile still loading
-  const tabs = tabsFor(role);
+  const tabs = tabsFor(me, data.projects, data.customTabs).filter(([k]) => data.upgraded || k !== 'projects');
   const tab = tabs.some(([k]) => k === activeTab) ? activeTab : 'dashboard';
+  // shows.series etc: is that tab switched on for me? Dashboard and Calendar use it to hide panels.
+  const shows = new Proxy({}, { get: (_t, key) => tabOn(me, key) });
 
   const actions = {
     // videos
@@ -188,6 +223,27 @@ export default function App() {
     addNote: (row) => run(supabase.from('notes').insert({ ...row, author: userId })),
     saveNote: (id, patch) => run(supabase.from('notes').update(patch).eq('id', id)),
     deleteNote: (id) => run(supabase.from('notes').delete().eq('id', id)),
+    // projects
+    async addProject(row) {
+      const res = await supabase.from('projects').insert({ ...row, created_by: userId }).select().single();
+      if (res.error) say(res.error.message); else loadAll();
+      return res.data;
+    },
+    saveProject: (id, patch) => run(supabase.from('projects').update(patch).eq('id', id)),
+    deleteProject: (id) => run(supabase.from('projects').delete().eq('id', id)),
+    addProjectUpdate: (projectId, body) => run(supabase.from('project_updates').insert({ project_id: projectId, author: userId, body })),
+    deleteProjectUpdate: (id) => run(supabase.from('project_updates').delete().eq('id', id)),
+    // meetings
+    async addMeeting(row) {
+      const res = await supabase.from('meetings').insert({ ...row, created_by: userId }).select().single();
+      if (res.error) say(res.error.message); else loadAll();
+      return res.data;
+    },
+    saveMeeting: (id, patch) => run(supabase.from('meetings').update(patch).eq('id', id)),
+    deleteMeeting: (id) => run(supabase.from('meetings').delete().eq('id', id)),
+    // extra tabs (owner)
+    addCustomTab: (row) => run(supabase.from('custom_tabs').insert(row)),
+    deleteCustomTab: (id) => run(supabase.from('custom_tabs').delete().eq('id', id)),
     // people
     updateProfile: (id, patch) => run(supabase.from('profiles').update(patch).eq('id', id))
   };
@@ -209,7 +265,10 @@ export default function App() {
     if (val && val !== me.display_name) await actions.updateProfile(userId, { display_name: val });
   }
 
-  const common = { role, me, ...data, actions, openVideo, goTab };
+  const common = { role, me, ...data, actions, openVideo, goTab, shows };
+  if (isMini) return <Mini {...common} />;
+  const pinnedProject = tab.startsWith('project:') ? data.projects.find((p) => p.id === tab.slice(8)) : null;
+  const customTab = tab.startsWith('custom:') ? data.customTabs.find((t) => t.id === tab.slice(7)) : null;
   const selectedVideo = selectedVideoId ? data.videos.find((v) => v.id === selectedVideoId) : null;
 
   return (
@@ -228,8 +287,8 @@ export default function App() {
           <span className="ops">Ops</span>
         </div>
         <nav className="tabs">
-          {tabs.map(([key, label]) => (
-            <button key={key} className={tab === key ? 'active' : ''} onClick={() => goTab(key)}>{label}</button>
+          {tabs.map(([key, label, kind]) => (
+            <button key={key} className={`${tab === key ? 'active' : ''} ${kind ? `tab-${kind}` : ''}`} onClick={() => goTab(key)}>{label}</button>
           ))}
         </nav>
         <div className="viewer-chip">
@@ -248,7 +307,7 @@ export default function App() {
               {me.display_name}
             </span>
           )}
-          <RolePill role={role} />
+          <RolePill role={role} title={me.title} />
           <button
             type="button" className={`greentoggle ${me.show_done_green ? 'on' : ''}`} aria-pressed={!!me.show_done_green}
             title="Show finished tasks, posts and videos in green. Only changes your own view."
@@ -269,6 +328,9 @@ export default function App() {
         {tab === 'requests' && <Requests {...common} />}
         {tab === 'hours' && <Hours {...common} />}
         {tab === 'team' && <Team {...common} />}
+        {tab === 'projects' && <Projects {...common} />}
+        {pinnedProject && <ProjectDetail key={pinnedProject.id} project={pinnedProject} {...common} />}
+        {customTab && <CustomTabView key={customTab.id} tab={customTab} />}
       </main>
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>

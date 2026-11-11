@@ -106,7 +106,7 @@ export async function moveContent(item, newDate, actions) {
 
 // Can this person approve this post right now? Anyone except the person who created it.
 export function canApproveContent(item, me) {
-  return item.status === 'in_review' && item.created_by !== me.id;
+  return item.status === 'in_review' && item.created_by !== me.id && (me.role === 'owner' || me.can_approve !== false);
 }
 
 // Owner only: approve without submitting (drafts, changes requested) or approve your own post.

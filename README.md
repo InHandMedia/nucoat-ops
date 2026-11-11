@@ -88,6 +88,32 @@ Trigger a redeploy so they take effect. Give Brady the site address and his logi
 - **Plan field:** each post has an editable Plan. "Auto-fill from the post" writes one from its type, channel and video; new posts get one automatically.
 - **Upgrading an existing project:** run `supabase/migration_02_metrics_and_assignments.sql` and then `supabase/migration_03_owner_override.sql` once each (safe to run again).
 
+## Workspace upgrade (migration 07)
+
+Run `supabase/migration_07_workspace.sql` once in the Supabase SQL Editor. Until it is run the app works exactly as before and the Team tab shows a reminder.
+
+- **Team tab (owner):** a live card per person (open tasks, overdue, approvals waiting, next task, next meeting, projects, when they were last active). Click a person to see their task list and menu.
+- **Tabs and features:** a grid of people and tabs. Untick a tab to remove it from that person's menu and dashboard. Click a column name to switch it for everyone but you. Series starts switched off for everyone except the owner. Quick setups: Everything, Marketing, Sales, Projects only. This tidies what people see; it is not a security lock (hours and projects are the locked parts).
+- **Teams:** each person has a team (Marketing, Sales, Operations...). The live view filters by it. To bring in a sales person: add their login, set Team to Sales, apply the Sales quick setup, add them to projects.
+- **Projects:** only members and the owner can see a project (enforced in the database). Each has tasks, updates, meetings, a status and a target date. "Give each member a tab" puts the project in their menu. People without a login can be listed by name until they have one.
+- **Meetings:** add one from the Calendar, the Dashboard or a project. After saving: **Send Teams invite** opens Teams with the title, time and attendees filled in (pressing Send there creates the Teams meeting and emails everyone), **Email invite** opens your mail app, **Calendar file** downloads an .ics. Paste the Teams join link back into the meeting so everyone gets a Join button. Invite emails come from each person's email on the Team tab.
+- **Calendar:** now shows meetings and your own task due dates. Click a legend item to hide or show that kind of event.
+- **Extra tabs:** the owner can add a tab for any web page (a sales sheet, a report) for everyone or chosen people.
+- **Mac widget:** Team tab, "On your Mac". The calendar address feeds your open tasks and meetings into Apple Calendar, whose widget then shows them on the desktop. The mini window (`?mini`) is a small live task list you can add to the Dock from Safari. The feed runs through `netlify/functions/feed.mjs` and uses the same two Supabase environment variables (their scope must include Functions).
+
+## Private project tasks and the weekly digest (migration 08)
+
+Run `supabase/migration_08_private_project_tasks.sql` once, after migration 07.
+
+- **Project tasks are members-only.** A task that belongs to a project is visible only to that project's members and the owner, enforced in the database. Tasks with no project are unchanged. Deleting a project releases its tasks back to the shared Tasks tab.
+- **Job titles and who approves.** On the Team tab each person gets a free-text job title (shown instead of Editor/Owner next to their name), and an **Approves** tick. Untick it and they are no longer asked to review posts or videos: the approve buttons disappear and the database refuses the approval. Role still decides what they can edit.
+- **Done dates.** Tasks record when they were finished. The live team view and the digest use it.
+- **Weekly digest.** Every Monday at 13:00 UTC (8 AM Eastern in winter, 9 AM in summer) the owner gets one email: overdue and stuck items, the week ahead, each person's load, project progress, what was finished, and last week's retainer hours. Test it any time from the Team tab ("Send me this week's digest now").
+  - Add two environment variables in Netlify (scope must include Functions), then redeploy:
+    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase, Project Settings, API keys, the **secret / service_role** key. Never prefix it with `VITE_`; it must stay on the server.
+    - `RESEND_API_KEY`: from a free account at resend.com.
+  - Until a domain is verified in Resend, it only delivers to the email address the Resend account was created with. Sign up with the same email that is on the owner's profile, or set `DIGEST_TO`. To send from a NuCoat address later, verify the domain in Resend and set `DIGEST_FROM`.
+
 ## Updating later
 
 Copy changed files over the project, then `git add -A`, `git commit`, `git push`. Netlify redeploys on its own. If a `supabase/migration_NNN_*.sql` file ever appears, run it once as a **new query** in the SQL Editor first.

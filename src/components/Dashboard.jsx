@@ -6,6 +6,8 @@ import { effectiveAssignees } from '../people.js';
 import { TaskEditorFor } from './TaskEditor.jsx';
 import { SeriesDetail, InProgressDetail, BackBar } from './DashDetail.jsx';
 import Notes from './Notes.jsx';
+import { MeetingsPanel } from './Meetings.jsx';
+import { ProjectStatusChip } from './Projects.jsx';
 import { ChannelChip, ContentStatusChip, ContentReviewBox, canApproveContent } from './Content.jsx';
 
 function SeriesProgress({ videos, onOpen }) {
@@ -51,7 +53,7 @@ function ApprovalsPanel({ me, videos, contentItems, openVideo, goTab, actions, a
             {v.long_link && <a className="filelink" href={v.long_link} target="_blank" rel="noopener noreferrer">Long-form file</a>}
             {v.short_link && <a className="filelink" href={v.short_link} target="_blank" rel="noopener noreferrer">Short-form file</a>}
           </div>
-          <ReviewBox video={v} onReview={actions.reviewVideo} />
+          {(me.role === 'owner' || me.can_approve !== false) && <ReviewBox video={v} onReview={actions.reviewVideo} />}
         </div>
       ))}
       {(all ? waitingContent : waitingContent.slice(0, 8)).map((c) => (
@@ -123,7 +125,9 @@ export default function Dashboard(props) {
   const [view, setView] = React.useState(null); // null | 'series' | 'progress' | 'waiting'
   const [shootVideo, setShootVideo] = React.useState('');
   const [shootDate, setShootDate] = React.useState('');
-  const { role, me, videos, contentItems, tasks, requests, timeEntries, settings, estimates, profiles, openVideo, goTab, actions } = props;
+  const { role, me, videos, contentItems, tasks, requests, timeEntries, settings, estimates, profiles, openVideo, goTab, actions, shows = {}, projects = [], meetings = [], upgraded } = props;
+  const approver = isOwner(role) || me.can_approve !== false;
+  const myProjects = projects.filter((p) => (p.member_ids || []).includes(me.id) && p.status !== 'done');
   if (!isStaff(role)) return <ReviewerDashboard {...props} />;
 
   const today = todayISO();
@@ -170,20 +174,40 @@ export default function Dashboard(props) {
       <div className="section-head">
         <div>
           <h1>Hi, {me.display_name}</h1>
-          <p>Where the NuCoat series stands today.</p>
+          <p>{shows.series ? 'Where the NuCoat series stands today.' : 'Here is what is on your plate today.'}</p>
         </div>
       </div>
 
       <Notes {...props} />
 
-      <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />
+      {shows.series && <SeriesProgress videos={videos} onOpen={() => { setView('series'); window.scrollTo(0, 0); }} />}
 
       <div className="tiles">
-        <div className="tile clickable" {...open(() => { setView('progress'); window.scrollTo(0, 0); })}><div className="num">{inProgress.length}</div><div className="lbl">Videos in progress</div></div>
-        <div className={`tile clickable ${waiting.length + contentWaiting.length ? 'accent' : ''}`} {...open(() => { setView('waiting'); window.scrollTo(0, 0); })}><div className="num">{waiting.length + contentWaiting.length}</div><div className="lbl">Waiting on approval</div></div>
+        {shows.series
+          ? <div className="tile clickable" {...open(() => { setView('progress'); window.scrollTo(0, 0); })}><div className="num">{inProgress.length}</div><div className="lbl">Videos in progress</div></div>
+          : <div className="tile clickable" {...open(() => goTab('projects'))}><div className="num">{myProjects.length}</div><div className="lbl">Your projects</div></div>}
+        {approver && (shows.series || shows.content) && <div className={`tile clickable ${waiting.length + contentWaiting.length ? 'accent' : ''}`} {...open(() => { setView('waiting'); window.scrollTo(0, 0); })}><div className="num">{waiting.length + contentWaiting.length}</div><div className="lbl">Waiting on approval</div></div>}
         <div className="tile clickable" {...open(() => goTab('tasks'))}><div className="num">{myTasks.length}</div><div className="lbl">Your open tasks</div></div>
-        <div className="tile clickable" {...open(() => goTab('requests'))}><div className="num">{openRequests.length}</div><div className="lbl">Open requests</div></div>
+        {shows.requests && <div className="tile clickable" {...open(() => goTab('requests'))}><div className="num">{openRequests.length}</div><div className="lbl">Open requests</div></div>}
       </div>
+
+      {upgraded && (
+        <div className="grid2" style={{ marginBottom: '16px' }}>
+          <MeetingsPanel me={me} role={role} meetings={meetings} profiles={profiles} projects={projects} actions={actions} />
+          <div className="panel">
+            <h3>Your projects {shows.projects && <button className="linkbtn" onClick={() => goTab('projects')}>All projects</button>}</h3>
+            {myProjects.length ? myProjects.map((p) => {
+              const left = tasks.filter((t) => t.project_id === p.id && !t.done).length;
+              return (
+                <div className="rowline" key={p.id} style={{ cursor: 'pointer' }} onClick={() => goTab(p.show_in_menu ? `project:${p.id}` : 'projects')}>
+                  <span>{p.name} <span style={{ color: 'var(--ink-soft)', fontSize: '12px' }}>{left} open task{left === 1 ? '' : 's'}</span></span>
+                  <ProjectStatusChip status={p.status} />
+                </div>
+              );
+            }) : <div className="empty">You are not on any projects yet.</div>}
+          </div>
+        </div>
+      )}
 
       {owner && (
         <div className="panel clickable" style={{ marginBottom: '16px' }} {...open(() => goTab('hours'))}>
@@ -196,7 +220,7 @@ export default function Dashboard(props) {
         </div>
       )}
 
-      {(waiting.length > 0 || contentWaiting.length > 0) && (
+      {approver && (shows.series || shows.content) && (waiting.length > 0 || contentWaiting.length > 0) && (
         <ApprovalsPanel me={me} videos={videos} contentItems={contentItems} openVideo={openVideo} goTab={goTab} actions={actions} />
       )}
 
@@ -223,7 +247,7 @@ export default function Dashboard(props) {
             );
           }) : <div className="empty">Nothing assigned to you. Nice.</div>}
         </div>
-        <div className="panel">
+        {shows.content && <div className="panel">
           <h3>Posts this week <button className="linkbtn" onClick={() => goTab('content')}>Content</button></h3>
           {contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).length
             ? contentItems.filter((c) => c.publish_date >= todayISO() && c.publish_date <= addDays(todayISO(), 7)).slice(0, 6).map((c) => (
@@ -234,11 +258,11 @@ export default function Dashboard(props) {
             ))
             : <div className="empty">No posts scheduled in the next 7 days.</div>}
           {contentDrafts.length > 0 && <div style={{ fontSize: '12px', color: 'var(--ink-soft)', marginTop: '8px' }}>{contentDrafts.length} draft{contentDrafts.length > 1 ? 's' : ''} this week not yet submitted for approval.</div>}
-        </div>
+        </div>}
       </div>
 
       <div className="grid2">
-        <div className="panel">
+        {shows.series && <div className="panel">
           <h3>Upcoming shoots (next 14 days)</h3>
           {shoots.length ? shoots.map((v) => (
             <div className="rowline" key={v.id} style={{ cursor: 'pointer' }} onClick={() => openVideo(v.id)}>
@@ -260,8 +284,8 @@ export default function Dashboard(props) {
               >Schedule</button>
             </div>
           </div>
-        </div>
-        <div className="panel">
+        </div>}
+        {shows.requests && <div className="panel">
           <h3>{owner ? 'Requests to triage' : 'Open requests'} <button className="linkbtn" onClick={() => goTab('requests')}>Requests</button></h3>
           {(owner ? newRequests : openRequests).length ? (owner ? newRequests : openRequests).slice(0, 5).map((r) => (
             <div className="rowline" key={r.id}>
@@ -269,7 +293,7 @@ export default function Dashboard(props) {
               <span className="chip neutral">{r.status.replace('_', ' ')}</span>
             </div>
           )) : <div className="empty">{owner ? 'No new requests.' : 'No open requests.'}</div>}
-        </div>
+        </div>}
       </div>
     </>
   );

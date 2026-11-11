@@ -21,6 +21,16 @@ export function createDemoClient() {
   const OWNER_ONLY = ['request_estimates', 'time_entries', 'billing_settings'];
   const STAFF_ONLY = ['video_internal', 'checklist_items', 'tasks', 'metrics', 'metric_entries'];
 
+  // Row-level rules (mirrors the policies in migration_07_workspace.sql).
+  function rowVisible(table, r) {
+    if (table === 'tasks') return !r.project_id || isOwner() || db.projects.some((p) => p.id === r.project_id && (p.member_ids || []).includes(currentUserId));
+    if (table === 'projects') return isOwner() || (r.member_ids || []).includes(currentUserId);
+    if (table === 'project_updates') return isOwner() || db.projects.some((p) => p.id === r.project_id && (p.member_ids || []).includes(currentUserId));
+    if (table === 'meetings') return isStaff() || (r.attendee_ids || []).includes(currentUserId);
+    if (table === 'custom_tabs') return isOwner() || r.everyone || (r.member_ids || []).includes(currentUserId);
+    return true;
+  }
+
   function canRead(table) {
     if (!currentUserId) return false;
     if (OWNER_ONLY.includes(table)) return isOwner();
@@ -34,10 +44,20 @@ export function createDemoClient() {
     if (STAFF_ONLY.includes(table) || table === 'videos' || table === 'content_items') return isStaff();
     if (table === 'profiles') {
       if (isOwner()) return true;
-      return row.id === currentUserId && !(patch && 'role' in patch && patch.role !== row.role);
+      return row.id === currentUserId && !(patch && ['role', 'hidden_tabs', 'department', 'title', 'can_approve'].some((k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(row[k])));
+    }
+    if (table === 'projects' || table === 'custom_tabs') return isOwner();
+    if (table === 'meetings') return isStaff();
+    if (table === 'project_updates') {
+      if (op === 'insert') return row.author === currentUserId && rowVisible('project_updates', row);
+      return row.author === currentUserId || isOwner();
     }
     if (table === 'video_comments' || table === 'content_comments') {
       if (op === 'insert') return row.author === currentUserId && row.kind === 'comment';
+      return row.author === currentUserId || isOwner();
+    }
+    if (table === 'notes') {
+      if (op === 'insert') return row.author === currentUserId && (row.scope === 'private' || isStaff());
       return row.author === currentUserId || isOwner();
     }
     if (table === 'requests') {
@@ -58,6 +78,11 @@ export function createDemoClient() {
     content_items: () => ({ id: uid(), brand: 'NuCoat', channel: 'instagram', kind: 'other', brief: '', caption: '', asset_link: '', notes: '', video_id: null, status: 'draft', created_by: currentUserId, reviewed_by: null, reviewed_at: null, created_at: nowISO(), updated_at: nowISO() }),
     content_comments: () => ({ id: uid(), author: currentUserId, kind: 'comment', body: '', created_at: nowISO() }),
     metrics: () => ({ id: uid(), brand: 'NuCoat', detail: '', unit: '', kind: 'number', rollup: 'latest', baseline: null, target: null, target_label: '', relative: false, monthly_targets: null, target_date: null, owner_label: '', notes: '', position: 99, created_by: currentUserId, created_at: nowISO() }),
+    projects: () => ({ id: uid(), description: '', department: 'Marketing', status: 'planning', member_ids: [], outside_members: '', due_date: null, link: '', show_in_menu: true, created_by: currentUserId, created_at: nowISO() }),
+    project_updates: () => ({ id: uid(), author: currentUserId, body: '', created_at: nowISO() }),
+    meetings: () => ({ id: uid(), duration_min: 30, attendee_ids: [], extra_emails: '', join_link: '', notes: '', project_id: null, created_by: currentUserId, created_at: nowISO() }),
+    custom_tabs: () => ({ id: uid(), mode: 'embed', everyone: false, member_ids: [], position: 0, created_at: nowISO() }),
+    notes: () => ({ id: uid(), author: currentUserId, body: '', scope: 'private', to_user: null, pinned: false, ref_type: null, ref_id: null, ref_label: '', created_at: nowISO() }),
     metric_entries: () => ({ id: uid(), note: '', entry_date: new Date().toISOString().slice(0, 10), created_by: currentUserId, created_at: nowISO() })
   };
 
@@ -113,7 +138,7 @@ export function createDemoClient() {
 
     if (op === 'select') {
       if (!canRead(table)) return ok(q.single || q.maybe ? null : []);
-      let rows = db[table].filter((r) => matches(r, filters));
+      let rows = db[table].filter((r) => matches(r, filters) && rowVisible(table, r));
       if (q.order) {
         const [c, asc] = q.order;
         rows = [...rows].sort((a, b) => (a[c] > b[c] ? 1 : a[c] < b[c] ? -1 : 0) * (asc ? 1 : -1));
@@ -158,6 +183,7 @@ export function createDemoClient() {
         if (table === 'content_items') contentGuard(r, next, false);
         if (table === 'videos') beforeVideoUpdate(r, next);
         if (table === 'requests') next.updated_at = nowISO();
+        if (table === 'tasks') next.done_at = next.done ? (r.done ? r.done_at : nowISO()) : null;
         Object.assign(r, next);
       });
       notify(table);
@@ -177,6 +203,16 @@ export function createDemoClient() {
         db.video_internal = db.video_internal.filter((c) => !ids.includes(c.video_id));
         db.video_comments = db.video_comments.filter((c) => !ids.includes(c.video_id));
         db.tasks.forEach((t) => { if (ids.includes(t.video_id)) t.video_id = null; });
+      }
+      if (table === 'projects') {
+        const pids = rows.map((r) => r.id);
+        db.project_updates = db.project_updates.filter((u) => !pids.includes(u.project_id));
+        db.tasks.forEach((t) => { if (pids.includes(t.project_id)) t.project_id = null; });
+        db.meetings.forEach((m) => { if (pids.includes(m.project_id)) m.project_id = null; });
+        ['project_updates', 'tasks', 'meetings'].forEach(notify);
+      }
+      if (table === 'videos') {
+        const ids = rows.map((r) => r.id);
         db.content_items.forEach((t) => { if (ids.includes(t.video_id)) t.video_id = null; });
         ['checklist_items', 'video_internal', 'video_comments', 'tasks'].forEach(notify);
       }
@@ -220,6 +256,8 @@ export function createDemoClient() {
   }
 
   async function rpc(name, args) {
+    if (name === 'my_feed_token') return ok('00000000-demo-0000-0000-000000000000');
+    if (['review_content', 'review_video'].includes(name) && !isOwner() && me()?.can_approve === false) return err('Approvals are switched off for your account');
     if (name === 'review_content') {
       if (!['reviewer', 'editor', 'owner'].includes(role())) return err('You do not have permission to approve');
       const c = db.content_items.find((x) => x.id === args.p_item);

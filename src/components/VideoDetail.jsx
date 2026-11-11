@@ -228,7 +228,7 @@ export default function VideoDetail({ video, role, me, profiles, internal, check
         <b>{video.stage === 'client_approval' ? 'Script approval' : 'Final video review'}</b>
         {owner ? ': another editor (usually Brady) approves this. You can also record a decision here if they replied outside the app.' : ': read below, then approve or ask for changes.'}
       </div>
-      <ReviewBox video={video} onReview={actions.reviewVideo} />
+      {(me.role === 'owner' || me.can_approve !== false) && <ReviewBox video={video} onReview={actions.reviewVideo} />}
     </div>
   );
 
