@@ -37,9 +37,14 @@ export function missing(cfg) {
 }
 
 export async function table(cfg, name, query = 'select=*') {
-  const res = await fetch(`${cfg.url}/rest/v1/${name}?${query}`, {
-    headers: { apikey: cfg.secret, Authorization: `Bearer ${cfg.secret}` }
-  });
+  // New-style Supabase keys (sb_secret_...) go in the apikey header only; putting them in
+  // Authorization gets the request rejected. Old-style keys (eyJ...) need both.
+  const key = (cfg.secret || '').trim();
+  const headers = key.startsWith('eyJ') ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key };
+  const res = await fetch(`${cfg.url}/rest/v1/${name}?${query}`, { headers });
+  if (res.status === 401 || res.status === 403) {
+    throw new Error('Supabase did not accept the secret key. In Netlify, check that SUPABASE_SERVICE_ROLE_KEY holds the whole secret key from this project (Supabase, Project Settings, API Keys), with no spaces, then redeploy.');
+  }
   if (!res.ok) throw new Error(`Could not read ${name} (${res.status})`);
   return res.json();
 }

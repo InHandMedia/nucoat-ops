@@ -15,10 +15,9 @@ export default async (req) => {
   if (!who.ok) return Response.json({ ok: false, message: 'Sign in again, then retry.' }, { status: 401 });
   const user = await who.json();
   if (!/^[0-9a-f-]{36}$/i.test(user.id || '')) return Response.json({ ok: false, message: 'Sign in again, then retry.' }, { status: 401 });
-  const rows = await table(cfg, 'profiles', `select=role&id=eq.${user.id}`);
-  if (rows[0]?.role !== 'owner') return Response.json({ ok: false, message: 'Only the owner can send the digest.' }, { status: 403 });
-
   try {
+    const rows = await table(cfg, 'profiles', `select=role&id=eq.${user.id}`);
+    if (rows[0]?.role !== 'owner') return Response.json({ ok: false, message: 'Only the owner can send the digest.' }, { status: 403 });
     return Response.json(await sendDigest());
   } catch (e) {
     return Response.json({ ok: false, message: e.message || 'Something went wrong building the digest.' });

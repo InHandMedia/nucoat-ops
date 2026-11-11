@@ -250,7 +250,7 @@ function DigestSetup() {
       const { data } = await supabase.auth.getSession();
       const res = await fetch('/.netlify/functions/digest-now', { method: 'POST', headers: { Authorization: `Bearer ${data.session?.access_token || ''}` } });
       const out = await res.json();
-      setMsg(out.message || 'Done.');
+      setMsg(out.message || 'Something went wrong on the server. Tell Claude and it can read the log.');
     } catch {
       setMsg('Could not reach the digest. Has the site been redeployed since this was added?');
     }
